@@ -1,0 +1,13 @@
+user_id,bio,topics_of_interest
+authority1,"AI researcher with 10+ years of experience in deep learning and neural networks. Currently leading AI research at TechCorp. Published author and conference speaker.","AI||MachineLearning||DeepLearning"
+authority2,"Data Science expert specializing in big data analytics and statistical modeling. PhD in Computer Science. Building data-driven solutions for enterprise clients.","DataScience||Statistics||BigData"
+authority3,"Machine Learning engineer and educator. Focused on practical ML applications and model deployment. Creator of popular ML courses and tutorials.","MachineLearning||AI||MLOps"
+user1,"Software engineer passionate about AI and machine learning. Building intelligent systems and learning new technologies.","AI||MachineLearning"
+user2,"Data analyst with interest in AI applications. Working on predictive modeling and data visualization.","AI||DataScience"
+user3,"Computer Science student specializing in artificial intelligence. Researching neural networks and deep learning.","AI||DeepLearning"
+user4,"Data scientist working on big data projects. Expert in statistical analysis and data visualization.","DataScience||Statistics"
+user5,"Analytics professional with focus on data-driven decision making. Building predictive models for business applications.","DataScience||MachineLearning"
+user6,"Research scientist in data analytics. Working on large-scale data processing and analysis.","DataScience||BigData"
+user7,"ML engineer building production-grade machine learning systems. Focused on model deployment and scaling.","MachineLearning||MLOps"
+user8,"Software developer with interest in ML applications. Building AI-powered products and services.","MachineLearning||AI"
+user9,"Data engineer working on ML infrastructure. Specializing in data pipelines and model deployment.","MachineLearning||BigData" 

@@ -1,0 +1,42 @@
+[build-system]
+requires = [ "setuptools",]
+build-backend = "setuptools.build_meta"
+
+[project]
+requires-python = ">=3.9"
+name = "topical_authority_discovery"
+readme = "README.md"
+dynamic = [ "version",]
+dependencies = [
+ "ipython>=8.10",
+ "jupyterlab>=3.0",
+ "notebook",
+ "kedro[jupyter]~=0.19.12",
+ "kedro-viz>=6.7.0",
+ "scikit-learn~=1.5.1",
+ "seaborn~=0.12.1",
+ "kedro-datasets[networkx,pandas-csvdataset,yaml]>=4.1.0",
+ "pyarrow>=20.0.0",
+ "fastparquet>=2024.11.0",
+ "openpyxl>=3.1.5",
+]
+
+[project.scripts]
+topical-authority-discovery = "topical_authority_discovery.__main__:main"
+
+[tool.kedro]
+package_name = "topical_authority_discovery"
+project_name = "topical-authority-discovery"
+kedro_init_version = "0.19.12"
+tools = "['Custom Logging', 'Data Structure']"
+example_pipeline = "True"
+source_dir = "src"
+
+[project.entry-points."kedro.hooks"]
+
+[tool.setuptools.dynamic.version]
+attr = "topical_authority_discovery.__version__"
+
+[tool.setuptools.packages.find]
+where = [ "src",]
+namespaces = false

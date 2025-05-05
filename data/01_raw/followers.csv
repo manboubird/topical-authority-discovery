@@ -1,0 +1,13 @@
+follower_id,leader_id
+user1,authority1
+user2,authority1
+user3,authority1
+user4,authority2
+user5,authority2
+user6,authority2
+user7,authority3
+user8,authority3
+user9,authority3
+user1,authority2
+user4,authority1
+user7,authority2 
