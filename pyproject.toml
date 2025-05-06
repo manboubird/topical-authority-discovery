@@ -40,3 +40,8 @@ attr = "topical_authority_discovery.__version__"
 [tool.setuptools.packages.find]
 where = [ "src",]
 namespaces = false
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+]

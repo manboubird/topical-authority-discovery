@@ -1,6 +1,8 @@
 import pandas as pd
 from kedro_datasets.networkx import GMLDataset
 import networkx as nx
+from sklearn.feature_extraction.text import TfidfVectorizer
+import re
 
 def _is_true(x: pd.Series) -> pd.Series:
     return x == "t"
@@ -106,45 +108,61 @@ def create_model_input_table(
 
 
 def extract_keyword_from_bio(users: pd.DataFrame) -> pd.DataFrame:
-    """Extract key phrases from user bios using PyTextRank.
-    
+    """Extract keywords from user bios using TF-IDF.
+
     Args:
-        users: DataFrame containing user profiles with 'bio' column.
-    
+        users: DataFrame containing user_id, bio, and topics_of_interest columns
+
     Returns:
-        DataFrame with additional 'extracted_keywords' column containing
-        key phrases extracted from bios.
+        DataFrame with added extracted_keywords column
     """
-    import spacy
-    import pytextrank
-    
-    # Load spaCy model and add PyTextRank to the pipeline
-    nlp = spacy.load("en_core_web_sm")
-    nlp.add_pipe("textrank")
-    
-    def extract_phrases(text):
-        """Extract key phrases from a single text using PyTextRank."""
-        doc = nlp(text)
-        
-        # Get key phrases and their ranks
-        phrases = []
-        for phrase in doc._.phrases:
-            # Get the normalized text and its rank
-            phrase_text = phrase.text.lower()
-            rank = phrase.rank
-            
-            # Only include phrases that are not too short and have good rank
-            if len(phrase_text.split()) >= 2 and rank > 0.1:
-                phrases.append(phrase_text)
-        
-        # Join phrases with the same separator as topics_of_interest
-        return "||".join(phrases) if phrases else ""
-    
-    # Create a copy of the input DataFrame
+    # Create a copy to avoid modifying the original
     users_with_keywords = users.copy()
     
-    # Extract keywords from bios and add as new column
-    users_with_keywords['extracted_keywords'] = users_with_keywords['bio'].apply(extract_phrases)
+    # Preprocess bios
+    def preprocess_text(text):
+        # Convert to lowercase and remove special characters
+        text = text.lower()
+        text = re.sub(r'[^\w\s]', ' ', text)
+        # Remove extra whitespace
+        text = ' '.join(text.split())
+        return text
+    
+    # Preprocess all bios
+    processed_bios = users_with_keywords['bio'].apply(preprocess_text)
+    
+    # Initialize TF-IDF vectorizer
+    vectorizer = TfidfVectorizer(
+        max_features=10,  # Extract top 10 keywords
+        stop_words='english',  # Use built-in English stop words
+        ngram_range=(1, 2)  # Consider both unigrams and bigrams
+    )
+    
+    # Fit and transform the bios
+    tfidf_matrix = vectorizer.fit_transform(processed_bios)
+    
+    # Get feature names (keywords)
+    feature_names = vectorizer.get_feature_names_out()
+    
+    # Extract top keywords for each bio
+    def get_top_keywords(tfidf_vector, feature_names):
+        # Get indices of non-zero elements
+        indices = tfidf_vector.indices
+        # Get corresponding scores
+        scores = tfidf_vector.data
+        # Create pairs of (score, keyword)
+        keyword_scores = [(scores[i], feature_names[indices[i]]) for i in range(len(indices))]
+        # Sort by score in descending order
+        keyword_scores.sort(reverse=True)
+        # Get top keywords
+        top_keywords = [kw for _, kw in keyword_scores[:5]]  # Get top 5 keywords
+        return '||'.join(top_keywords)
+    
+    # Apply keyword extraction to each bio
+    users_with_keywords['extracted_keywords'] = [
+        get_top_keywords(tfidf_matrix[i], feature_names)
+        for i in range(len(users_with_keywords))
+    ]
     
     return users_with_keywords
 
