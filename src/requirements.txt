@@ -1,2 +1,0 @@
-pytextrank>=3.2.4
-spacy>=3.7.2 

@@ -1,3 +1,28 @@
+followers:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/followers.csv
+
+users:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/users.csv
+
+users_with_keywords:
+  type: pandas.ParquetDataset
+  filepath: data/02_intermediate/users_with_keywords.parquet
+
+authority_scores:
+  type: pandas.ParquetDataset
+  filepath: data/02_intermediate/authority_scores.parquet
+
+reviews:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/reviews.csv
+
+
+preprocessed_followers:
+  type: networkx.GMLDataset
+  filepath: data/02_intermediate/preprocessed_followers.gml
+
 # Here you can define all your data sets by using simple YAML syntax.
 #
 # Documentation for this file format can be found in "The Data Catalog"
@@ -39,39 +64,15 @@
 # (transcoding), templating and a way to reuse arguments that are frequently repeated. See more here:
 # https://docs.kedro.org/en/stable/data/data_catalog.html
 
-# companies:
-#   type: pandas.CSVDataset
-#   filepath: data/01_raw/companies.csv
-
-followers:
+companies:
   type: pandas.CSVDataset
-  filepath: data/01_raw/followers.csv
+  filepath: data/01_raw/companies.csv
 
-users:
-  type: pandas.CSVDataset
-  filepath: data/01_raw/users.csv
-
-users_with_keywords:
-  type: pandas.ParquetDataset
-  filepath: data/02_intermediate/users_with_keywords.parquet
-
-authority_scores:
-  type: pandas.ParquetDataset
-  filepath: data/02_intermediate/authority_scores.parquet
-
-reviews:
-  type: pandas.CSVDataset
-  filepath: data/01_raw/reviews.csv
-
-# shuttles:
-#   type: pandas.ExcelDataset
-#   filepath: data/01_raw/shuttles.xlsx
-#   load_args:
-#     engine: openpyxl
-
-preprocessed_followers:
-  type: networkx.GMLDataset
-  filepath: data/02_intermediate/preprocessed_followers.gml
+shuttles:
+  type: pandas.ExcelDataset
+  filepath: data/01_raw/shuttles.xlsx
+  load_args:
+    engine: openpyxl
 
 # preprocessed_companies:
 #   type: pandas.ParquetDataset
