@@ -3,22 +3,37 @@ requires = [ "setuptools",]
 build-backend = "setuptools.build_meta"
 
 [project]
-requires-python = "~=3.9"
+requires-python = "==3.9.22"
 name = "topical_authority_discovery"
 readme = "README.md"
 dynamic = [ "version",]
 dependencies = [
+ # Core Kedro and interactive environment
  "ipython>=8.10",
- "jupyterlab>=3.0",
- "notebook",
+ "jupyterlab>=3.0",  # Kept as per instruction
+ "notebook",  # Kept as per instruction
  "kedro[jupyter]~=0.19.12",
  "kedro-viz>=6.7.0",
- "scikit-learn~=1.5.1",
- "seaborn~=0.12.1",
- "kedro-datasets[networkx,pandas-csvdataset,yaml]>=4.1.0",
- "pyarrow>=20.0.0",
- "fastparquet>=2024.11.0",
- "openpyxl>=3.1.5",
+ "kedro-datasets[networkx,pandas-csvdataset,yaml]~=4.1.0", # Updated and kept as per instruction
+
+ # Data processing and Machine Learning
+ "pandas~=2.2.3",
+ "numpy~=2.0.2",
+ "scikit-learn~=1.6.1", # Updated (was ~=1.5.1) and kept as per instruction
+
+ # Plotting
+ "matplotlib~=3.9.4",
+ "seaborn~=0.12.1", # Kept as per instruction
+
+ # Data formats
+ "pyarrow~=20.0.0", # Updated (was >=20.0.0)
+ "fastparquet~=2024.11.0", # Updated (was >=2024.11.0)
+ "openpyxl~=3.1.5", # Updated (was >=3.1.5) and kept as per instruction
+
+ # NLP
+ "spacy~=3.8.5",
+ "en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85",
+ "pytextrank~=3.3.0",
 ]
 
 [project.scripts]
@@ -43,5 +58,7 @@ namespaces = false
 
 [dependency-groups]
 dev = [
+    "pip>=25.1.1",
+    "pip-tools>=7.4.1",
     "pytest>=8.3.5",
 ]
