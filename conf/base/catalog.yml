@@ -23,6 +23,10 @@ preprocessed_followers:
   type: networkx.GMLDataset
   filepath: data/02_intermediate/preprocessed_followers.gml
 
+fashion_entities:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/fashion_entities.csv
+
 # Here you can define all your data sets by using simple YAML syntax.
 #
 # Documentation for this file format can be found in "The Data Catalog"

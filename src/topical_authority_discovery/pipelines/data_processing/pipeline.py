@@ -21,7 +21,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             node(
                 func=extract_keyword_from_bio,
-                inputs="users",
+                inputs=["users", "fashion_entities"],
                 outputs="users_with_keywords",
                 name="extract_keyword_from_bio_node",
             ),

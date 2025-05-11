@@ -3,6 +3,11 @@ from kedro_datasets.networkx import GMLDataset
 import networkx as nx
 from sklearn.feature_extraction.text import TfidfVectorizer
 import re
+import spacy
+from spacy.kb import InMemoryLookupKB
+from spacy.tokens import Span
+import numpy as np
+import pytextrank
 
 def _is_true(x: pd.Series) -> pd.Series:
     return x == "t"
@@ -107,108 +112,166 @@ def create_model_input_table(
     return model_input_table
 
 
-def extract_keyword_from_bio(users: pd.DataFrame) -> pd.DataFrame:
-    """Extract key phrases from user bios using PyTextRank.
+def construct_fashion_knowledge_base(fashion_entities: pd.DataFrame) -> InMemoryLookupKB:
+    """Construct a knowledge base for fashion terminology.
+    
+    Args:
+        fashion_entities: DataFrame containing fashion entities with columns:
+            - entity_id: Unique identifier for the entity (e.g., "Q1")
+            - name: Canonical name of the entity (e.g., "Minimalist Style")
+            - aliases: Pipe-separated list of aliases (e.g., "minimalist style||minimalist fashion")
+            - vector: Entity vector representation (optional)
+    
+    Returns:
+        InMemoryLookupKB: A knowledge base containing fashion entities and their aliases.
+    """
+    # Load spaCy model
+    nlp = spacy.load("en_core_web_sm")
+    
+    # Initialize knowledge base
+    kb = InMemoryLookupKB(nlp.vocab, entity_vector_length=1)
+    
+    # Add entities and aliases to knowledge base
+    for _, row in fashion_entities.iterrows():
+        # Add entity
+        kb.add_entity(
+            entity=row['entity_id'],
+            entity_vector=[1.0],  # Default vector if not provided
+            freq=1
+        )
+        
+        # Add aliases
+        aliases = row['aliases'].split('||')
+        for alias in aliases:
+            kb.add_alias(
+                alias=alias.strip(),
+                entities=[row['entity_id']],
+                probabilities=[1.0]
+            )
+    
+    return kb
+
+def link_fashion_entities(text: str, kb: InMemoryLookupKB) -> list:
+    """Link fashion-related phrases in text to entities in the knowledge base.
+    
+    Args:
+        text: Input text to process
+        kb: Knowledge base containing fashion entities
+    
+    Returns:
+        list: List of linked fashion entities found in the text
+    """
+    # Load spaCy model
+    nlp = spacy.load("en_core_web_sm")
+    
+    # Process text
+    doc = nlp(text)
+    
+    # Find potential fashion mentions
+    fashion_mentions = []
+    
+    # Split text into potential phrases (2-3 words)
+    words = text.lower().split()
+    for i in range(len(words)):
+        # Try 2-word phrases
+        if i + 1 < len(words):
+            phrase = " ".join(words[i:i+2])
+            span = doc[i:i+2]
+            candidates = kb.get_candidates(span)
+            if candidates:
+                best_candidate = max(candidates, key=lambda x: x.prior_prob)
+                fashion_mentions.append({
+                    "text": phrase,
+                    "entity_id": best_candidate.entity_,
+                    "confidence": best_candidate.prior_prob
+                })
+        
+        # Try 3-word phrases
+        if i + 2 < len(words):
+            phrase = " ".join(words[i:i+3])
+            span = doc[i:i+3]
+            candidates = kb.get_candidates(span)
+            if candidates:
+                best_candidate = max(candidates, key=lambda x: x.prior_prob)
+                fashion_mentions.append({
+                    "text": phrase,
+                    "entity_id": best_candidate.entity_,
+                    "confidence": best_candidate.prior_prob
+                })
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_mentions = []
+    for mention in fashion_mentions:
+        if mention["entity_id"] not in seen:
+            seen.add(mention["entity_id"])
+            unique_mentions.append(mention)
+    
+    return unique_mentions
+
+def extract_keyword_from_bio(users: pd.DataFrame, fashion_entities: pd.DataFrame) -> pd.DataFrame:
+    """Extract key phrases from user bios and link them to fashion terminology.
     
     Args:
         users: DataFrame containing user profiles with 'bio' column.
+        fashion_entities: DataFrame containing fashion entities and their aliases.
     
     Returns:
-        DataFrame with additional 'extracted_keywords' column containing
-        key phrases extracted from bios.
+        DataFrame with additional 'extracted_keywords' and 'fashion_entities' columns
     """
     import spacy
     import pytextrank
     
-    # Load spaCy model and add PyTextRank to the pipeline
+    # Load spaCy model
     nlp = spacy.load("en_core_web_sm")
-    nlp.add_pipe("textrank")
     
-    def extract_phrases(text):
-        """Extract key phrases from a single text using PyTextRank."""
+    # Add PyTextRank to the pipeline
+    # The pipe name "textrank" is registered by pytextrank package
+    nlp.add_pipe("textrank", last=True)
+    
+    # Construct fashion knowledge base
+    fashion_kb = construct_fashion_knowledge_base(fashion_entities)
+    
+    def extract_and_link_phrases(text):
+        """Extract key phrases and link them to fashion entities."""
+        if pd.isna(text):
+            return pd.Series(["", ""])
+            
+        # Extract key phrases using PyTextRank
         doc = nlp(text)
-        
-        # Get key phrases and their ranks
         phrases = []
         for phrase in doc._.phrases:
-            # Get the normalized text and its rank
             phrase_text = phrase.text.lower()
-            rank = phrase.rank
-            
-            # Only include phrases that are not too short and have good rank
-            if len(phrase_text.split()) >= 2 and rank > 0.1:
+            if len(phrase_text.split()) >= 2 and phrase.rank > 0.1:
                 phrases.append(phrase_text)
         
-        # Join phrases with the same separator as topics_of_interest
-        return "||".join(phrases) if phrases else ""
+        # Link phrases to fashion entities
+        fashion_entities = []
+        for phrase in phrases:
+            linked_entities = link_fashion_entities(phrase, fashion_kb)
+            if linked_entities:
+                fashion_entities.extend(linked_entities)
+        
+        # Format results
+        keywords = "||".join(phrases) if phrases else ""
+        fashion_entity_ids = "||".join(set(e["entity_id"] for e in fashion_entities)) if fashion_entities else ""
+        
+        # Print debug information
+        print(f"\nProcessing text: {text}")
+        print(f"Extracted phrases: {phrases}")
+        print(f"Linked entities: {fashion_entities}")
+        print(f"Formatted keywords: {keywords}")
+        print(f"Formatted entity IDs: {fashion_entity_ids}")
+        
+        return pd.Series([keywords, fashion_entity_ids])
     
     # Create a copy of the input DataFrame
     users_with_keywords = users.copy()
     
-    # Extract keywords from bios and add as new column
-    users_with_keywords['extracted_keywords'] = users_with_keywords['bio'].apply(extract_phrases)
+    # Extract keywords and link fashion entities
+    users_with_keywords[['extracted_keywords', 'fashion_entities']] = users_with_keywords['bio'].apply(extract_and_link_phrases)
     
     return users_with_keywords
-
-
-# def extract_keyword_from_bio(users: pd.DataFrame) -> pd.DataFrame:
-#     """Extract keywords from user bios using TF-IDF.
-#
-#     Args:
-#         users: DataFrame containing user_id, bio, and topics_of_interest columns
-#
-#     Returns:
-#         DataFrame with added extracted_keywords column
-#     """
-#     # Create a copy to avoid modifying the original
-#     users_with_keywords = users.copy()
-#     
-#     # Preprocess bios
-#     def preprocess_text(text):
-#         # Convert to lowercase and remove special characters
-#         text = text.lower()
-#         text = re.sub(r'[^\w\s]', ' ', text)
-#         # Remove extra whitespace
-#         text = ' '.join(text.split())
-#         return text
-#     
-#     # Preprocess all bios
-#     processed_bios = users_with_keywords['bio'].apply(preprocess_text)
-#     
-#     # Initialize TF-IDF vectorizer
-#     vectorizer = TfidfVectorizer(
-#         max_features=10,  # Extract top 10 keywords
-#         stop_words='english',  # Use built-in English stop words
-#         ngram_range=(1, 2)  # Consider both unigrams and bigrams
-#     )
-#     
-#     # Fit and transform the bios
-#     tfidf_matrix = vectorizer.fit_transform(processed_bios)
-#     
-#     # Get feature names (keywords)
-#     feature_names = vectorizer.get_feature_names_out()
-#     
-#     # Extract top keywords for each bio
-#     def get_top_keywords(tfidf_vector, feature_names):
-#         # Get indices of non-zero elements
-#         indices = tfidf_vector.indices
-#         # Get corresponding scores
-#         scores = tfidf_vector.data
-#         # Create pairs of (score, keyword)
-#         keyword_scores = [(scores[i], feature_names[indices[i]]) for i in range(len(indices))]
-#         # Sort by score in descending order
-#         keyword_scores.sort(reverse=True)
-#         # Get top keywords
-#         top_keywords = [kw for _, kw in keyword_scores[:5]]  # Get top 5 keywords
-#         return '||'.join(top_keywords)
-#     
-#     # Apply keyword extraction to each bio
-#     users_with_keywords['extracted_keywords'] = [
-#         get_top_keywords(tfidf_matrix[i], feature_names)
-#         for i in range(len(users_with_keywords))
-#     ]
-#     
-#     return users_with_keywords
 
 
 def compute_authority_score(

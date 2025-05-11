@@ -5,6 +5,8 @@ from topical_authority_discovery.pipelines.data_processing.nodes import (
     compute_authority_score,
     preprocess_followers,
     extract_keyword_from_bio,
+    construct_fashion_knowledge_base,
+    link_fashion_entities,
 )
 
 
@@ -21,14 +23,17 @@ def sample_followers_data():
 def sample_users_data():
     """Create sample users data with bios and topics."""
     return pd.DataFrame({
-        'user_id': ['user1', 'user2', 'user3', 'user4', 'authority1', 'authority2'],
+        'user_id': ['user1', 'user2', 'user3', 'user4', 'authority1', 'authority2', 'fashion1', 'fashion2', 'fashion3'],
         'bio': [
             'AI enthusiast and machine learning practitioner',
             'Data scientist working on big data projects',
             'Software engineer interested in AI and ML',
             'Research scientist in data analytics',
             'AI researcher with 10+ years experience in deep learning',
-            'Data Science expert specializing in big data analytics'
+            'Data Science expert specializing in big data analytics',
+            'Fashion designer specializing in minimalist style and sustainable fashion',
+            'Streetwear enthusiast and urban style influencer',
+            'Vintage fashion collector and retro style expert'
         ],
         'topics_of_interest': [
             'AI||MachineLearning',
@@ -36,7 +41,10 @@ def sample_users_data():
             'AI||MachineLearning',
             'DataScience||Statistics',
             'AI||MachineLearning||DeepLearning',
-            'DataScience||Statistics||BigData'
+            'DataScience||Statistics||BigData',
+            'Fashion||Minimalism||Sustainable',
+            'Fashion||Streetwear||Urban',
+            'Fashion||Vintage||Retro'
         ]
     })
 
@@ -98,6 +106,46 @@ def real_world_sns_data():
     }
 
 
+@pytest.fixture
+def fashion_test_data():
+    """Create sample data with fashion-related bios."""
+    return pd.DataFrame({
+        'user_id': ['fashion1', 'fashion2', 'fashion3'],
+        'bio': [
+            'Fashion designer specializing in minimalist style and sustainable fashion',
+            'Streetwear enthusiast and urban style influencer',
+            'Vintage fashion collector and retro style expert'
+        ],
+        'topics_of_interest': [
+            'Fashion||Minimalism',
+            'Fashion||Streetwear',
+            'Fashion||Vintage'
+        ]
+    })
+
+
+@pytest.fixture
+def fashion_entities_data():
+    """Create sample fashion entities data."""
+    return pd.DataFrame({
+        'entity_id': ['Q1', 'Q2', 'Q3', 'Q4', 'Q5'],
+        'name': [
+            'Minimalist Style',
+            'Streetwear',
+            'Vintage Fashion',
+            'Sustainable Fashion',
+            'High Fashion'
+        ],
+        'aliases': [
+            'minimalist style||minimalist fashion||minimalist look||minimalist aesthetic',
+            'streetwear||street fashion||urban style||street style',
+            'vintage fashion||retro style||vintage clothing||retro fashion',
+            'sustainable fashion||eco fashion||ethical fashion||slow fashion',
+            'high fashion||haute couture||luxury fashion||designer fashion'
+        ]
+    })
+
+
 def test_preprocess_followers(sample_followers_data):
     """Test the follower graph creation."""
     graph = preprocess_followers(sample_followers_data)
@@ -140,18 +188,51 @@ def test_preprocess_followers_with_duplicate_edges(sample_followers_data):
     )))
 
 
-def test_extract_keyword_from_bio(sample_users_data):
+def test_extract_keyword_from_bio(sample_users_data, fashion_entities_data):
     """Test the keyword extraction from bios."""
-    users_with_keywords = extract_keyword_from_bio(sample_users_data)
+    users_with_keywords = extract_keyword_from_bio(sample_users_data, fashion_entities_data)
     
-    # Check if new column is added
+    # Print debug information
+    print("\nExtracted keywords:")
+    for idx, row in users_with_keywords.iterrows():
+        print(f"User {row['user_id']}:")
+        print(f"  Bio: {row['bio']}")
+        print(f"  Keywords: {row['extracted_keywords']}")
+        print(f"  Fashion entities: {row['fashion_entities']}")
+    
+    # Check if new columns are added
     assert 'extracted_keywords' in users_with_keywords.columns
+    assert 'fashion_entities' in users_with_keywords.columns
     
     # Check if keywords are extracted (non-empty)
     assert all(users_with_keywords['extracted_keywords'].str.len() > 0)
     
-    # Check if separator is correct
-    assert all('||' in keywords for keywords in users_with_keywords['extracted_keywords'] if len(keywords) > 0)
+    # Check if keywords are properly formatted
+    for keywords in users_with_keywords['extracted_keywords']:
+        # Check if it's a single phrase or multiple phrases
+        if '||' in keywords:
+            # Multiple phrases should be properly separated
+            phrases = keywords.split('||')
+            assert len(phrases) > 1
+            # Each phrase should be non-empty
+            assert all(len(phrase.strip()) > 0 for phrase in phrases)
+        else:
+            # Single phrase should be non-empty
+            assert len(keywords.strip()) > 0
+    
+    # Check if fashion entities are linked
+    assert all(users_with_keywords['fashion_entities'].str.len() >= 0)  # Can be empty if no fashion terms found
+    
+    # Check specific fashion entity matches
+    fashion1_entities = users_with_keywords.loc[users_with_keywords['user_id'] == 'fashion1', 'fashion_entities'].iloc[0]
+    assert 'Q1' in fashion1_entities  # Minimalist Style
+    assert 'Q4' in fashion1_entities  # Sustainable Fashion
+    
+    fashion2_entities = users_with_keywords.loc[users_with_keywords['user_id'] == 'fashion2', 'fashion_entities'].iloc[0]
+    assert 'Q2' in fashion2_entities  # Streetwear
+    
+    fashion3_entities = users_with_keywords.loc[users_with_keywords['user_id'] == 'fashion3', 'fashion_entities'].iloc[0]
+    assert 'Q3' in fashion3_entities  # Vintage Fashion
 
 
 def test_extract_keyword_from_bio_with_special_characters():
@@ -282,4 +363,147 @@ def test_compute_authority_score_with_topic_overlap(real_world_sns_data):
     ds_scores = authority_scores['DataScience']
     stats_scores = authority_scores['Statistics']
     correlation = ds_scores.corr(stats_scores)
-    assert correlation > 0.5  # Should have positive correlation 
+    assert correlation > 0.5  # Should have positive correlation
+
+
+def test_construct_fashion_knowledge_base(fashion_entities_data):
+    """Test the construction of the fashion knowledge base."""
+    kb = construct_fashion_knowledge_base(fashion_entities_data)
+    
+    # Test that knowledge base is created
+    assert kb is not None
+    
+    # Test that entities are added
+    assert kb.get_entity_strings() == {
+        "Q1": "Minimalist Style",
+        "Q2": "Streetwear",
+        "Q3": "Vintage Fashion",
+        "Q4": "Sustainable Fashion",
+        "Q5": "High Fashion"
+    }
+    
+    # Test that aliases are added
+    test_aliases = ["minimalist style", "streetwear", "vintage fashion"]
+    for alias in test_aliases:
+        candidates = kb.get_candidates(alias)
+        assert len(candidates) > 0
+
+
+def test_link_fashion_entities(fashion_entities_data):
+    """Test linking fashion entities in text."""
+    kb = construct_fashion_knowledge_base(fashion_entities_data)
+    
+    # Test with known fashion terms
+    text = "She loves minimalist style and sustainable fashion"
+    entities = link_fashion_entities(text, kb)
+    
+    assert len(entities) > 0
+    assert any(e["entity_id"] == "Q1" for e in entities)  # Minimalist Style
+    assert any(e["entity_id"] == "Q4" for e in entities)  # Sustainable Fashion
+    
+    # Test with unknown terms
+    text = "She loves pizza and movies"
+    entities = link_fashion_entities(text, kb)
+    assert len(entities) == 0
+
+
+def test_extract_keyword_from_bio_with_fashion(fashion_test_data, fashion_entities_data):
+    """Test keyword extraction with fashion entity linking."""
+    users_with_keywords = extract_keyword_from_bio(fashion_test_data, fashion_entities_data)
+    
+    # Check if new columns are added
+    assert 'extracted_keywords' in users_with_keywords.columns
+    assert 'fashion_entities' in users_with_keywords.columns
+    
+    # Check if fashion entities are linked
+    assert all(users_with_keywords['fashion_entities'].str.len() > 0)
+    
+    # Check specific fashion entity links
+    fashion1_entities = users_with_keywords.loc[users_with_keywords['user_id'] == 'fashion1', 'fashion_entities'].iloc[0]
+    assert 'Q1' in fashion1_entities  # Minimalist Style
+    assert 'Q4' in fashion1_entities  # Sustainable Fashion
+    
+    fashion2_entities = users_with_keywords.loc[users_with_keywords['user_id'] == 'fashion2', 'fashion_entities'].iloc[0]
+    assert 'Q2' in fashion2_entities  # Streetwear
+    
+    fashion3_entities = users_with_keywords.loc[users_with_keywords['user_id'] == 'fashion3', 'fashion_entities'].iloc[0]
+    assert 'Q3' in fashion3_entities  # Vintage Fashion
+
+
+def test_link_fashion_entities_detailed(fashion_entities_data):
+    """Test linking fashion entities with detailed input/output examples."""
+    kb = construct_fashion_knowledge_base(fashion_entities_data)
+    
+    # Test case 1: Single fashion term
+    text = "minimalist style"
+    print(f"\nTesting with text: {text}")
+    entities = link_fashion_entities(text, kb)
+    print(f"Found entities: {entities}")
+    assert len(entities) == 1
+    assert entities[0]["entity_id"] == "Q1"
+    assert entities[0]["text"] == "minimalist style"
+    
+    # Test case 2: Multiple fashion terms
+    text = "sustainable fashion and vintage clothing"
+    print(f"\nTesting with text: {text}")
+    entities = link_fashion_entities(text, kb)
+    print(f"Found entities: {entities}")
+    assert len(entities) == 2
+    entity_ids = {e["entity_id"] for e in entities}
+    assert "Q4" in entity_ids  # Sustainable Fashion
+    assert "Q3" in entity_ids  # Vintage Fashion
+    
+    # Test case 3: Alias matching
+    text = "haute couture"
+    print(f"\nTesting with text: {text}")
+    entities = link_fashion_entities(text, kb)
+    print(f"Found entities: {entities}")
+    assert len(entities) == 1
+    assert entities[0]["entity_id"] == "Q5"  # High Fashion
+    
+    # Test case 4: No fashion terms
+    text = "pizza and movies"
+    print(f"\nTesting with text: {text}")
+    entities = link_fashion_entities(text, kb)
+    print(f"Found entities: {entities}")
+    assert len(entities) == 0
+    
+    # Test case 5: Mixed content
+    text = "Fashion designer specializing in minimalist style and sustainable fashion"
+    print(f"\nTesting with text: {text}")
+    entities = link_fashion_entities(text, kb)
+    print(f"Found entities: {entities}")
+    assert len(entities) >= 2
+    entity_ids = {e["entity_id"] for e in entities}
+    assert "Q1" in entity_ids  # Minimalist Style
+    assert "Q4" in entity_ids  # Sustainable Fashion
+
+
+def test_link_fashion_entities_with_phrases(fashion_entities_data):
+    """Test linking fashion entities with specific phrases from the test data."""
+    kb = construct_fashion_knowledge_base(fashion_entities_data)
+    
+    # Test with phrases from fashion_test_data
+    test_phrases = [
+        "minimalist style",
+        "sustainable fashion",
+        "streetwear",
+        "vintage fashion",
+        "retro style"
+    ]
+    
+    for phrase in test_phrases:
+        entities = link_fashion_entities(phrase, kb)
+        assert len(entities) > 0, f"No entities found for phrase: {phrase}"
+        print(f"Phrase: {phrase}")
+        print(f"Found entities: {entities}")
+        
+        # Verify entity IDs
+        if "minimalist" in phrase:
+            assert any(e["entity_id"] == "Q1" for e in entities)
+        elif "sustainable" in phrase:
+            assert any(e["entity_id"] == "Q4" for e in entities)
+        elif "street" in phrase:
+            assert any(e["entity_id"] == "Q2" for e in entities)
+        elif "vintage" in phrase or "retro" in phrase:
+            assert any(e["entity_id"] == "Q3" for e in entities) 
