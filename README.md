@@ -179,3 +179,99 @@ The pipeline will:
 2. Extract keywords from user biographies
 3. Compute authority scores using the Fast Algorithm
 4. Save results to `data/02_intermediate/authority_scores.parquet`
+
+## Preprocessing Pipeline
+
+The project implements a series of preprocessing steps to prepare data for authority score computation:
+
+1. **Follower Graph Construction** (`preprocess_followers_node`)
+   - Input: Raw follower relationships
+   - Output: Directed graph representation
+   - Tags: `preprocessing`, `graph_construction`
+
+2. **Fashion Knowledge Base Construction** (`construct_fashion_knowledge_base_node`)
+   - Input: Fashion entities data and knowledge base path
+   - Output: In-memory knowledge base (saved to disk)
+   - Tags: `preprocessing`, `knowledge_base`
+
+3. **Keyword Extraction** (`extract_keyword_from_bio_node`)
+   - Input: User profiles and fashion knowledge base
+   - Output: Users with extracted keywords and linked fashion entities
+   - Tags: `preprocessing`, `keyword_extraction`
+
+4. **Authority Score Computation** (`compute_authority_score_node`)
+   - Input: Preprocessed follower graph and users with keywords
+   - Output: Authority scores matrix
+   - Tags: `authority_discovery`
+
+### Pipeline Visualization
+
+The pipeline dependencies can be visualized using Kedro-Viz:
+
+```bash
+kedro viz
+```
+
+This will open a web-based GUI showing the pipeline structure. The pipeline can also be represented in Mermaid format:
+
+```mermaid
+graph TD
+    A[followers] --> B[preprocess_followers_node]
+    B --> C[preprocessed_followers]
+    
+    D[fashion_entities] --> E[construct_fashion_knowledge_base_node]
+    F[params:fashion_knowledge_base_path] --> E
+    
+    G[users] --> H[extract_keyword_from_bio_node]
+    D --> H
+    F --> H
+    H --> I[users_with_keywords]
+    
+    C --> J[compute_authority_score_node]
+    I --> J
+    J --> K[authority_scores]
+```
+
+## Testing the Pipeline
+
+The project includes comprehensive tests for each preprocessing step. To run tests with detailed console output:
+
+1. **Run all preprocessing tests:**
+```bash
+pytest src/tests/pipelines/data_processing/test_nodes.py -k "preprocess_followers or construct_fashion_knowledge_base or extract_keyword_from_bio" -v -s
+```
+
+2. **Test follower graph construction:**
+```bash
+pytest src/tests/pipelines/data_processing/test_nodes.py -k "test_preprocess_followers" -v -s
+```
+
+3. **Test fashion knowledge base construction:**
+```bash
+pytest src/tests/pipelines/data_processing/test_nodes.py -k "test_construct_fashion_knowledge_base" -v -s
+```
+
+4. **Test keyword extraction and entity linking:**
+```bash
+pytest src/tests/pipelines/data_processing/test_nodes.py -k "test_link_fashion_entities" -v -s
+```
+
+5. **Test batch processing of entity linking:**
+```bash
+pytest src/tests/pipelines/data_processing/test_nodes.py -k "test_link_fashion_entities_batch_processing" -v -s
+```
+
+The `-s` flag ensures that all print statements are displayed in the console output, showing:
+- Knowledge base construction steps
+- Entity matching process
+- Confidence scores
+- Verification steps
+- Test progress and results
+
+Each test provides detailed output about:
+- Input data processing
+- Intermediate results
+- Entity matching
+- Confidence scores
+- Verification steps
+- Success/failure indicators

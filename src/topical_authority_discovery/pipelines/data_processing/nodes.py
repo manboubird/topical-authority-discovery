@@ -8,22 +8,7 @@ from spacy.kb import InMemoryLookupKB
 from spacy.tokens import Span
 import numpy as np
 import pytextrank
-
-def _is_true(x: pd.Series) -> pd.Series:
-    return x == "t"
-
-
-def _parse_percentage(x: pd.Series) -> pd.Series:
-    x = x.str.replace("%", "")
-    x = x.astype(float) / 100
-    return x
-
-
-def _parse_money(x: pd.Series) -> pd.Series:
-    x = x.str.replace("$", "").str.replace(",", "")
-    x = x.astype(float)
-    return x
-
+import os
 
 def preprocess_followers(followers_data: pd.DataFrame) -> nx.DiGraph:
     """Preprocesses the data for followers to create a directed graph.
@@ -61,58 +46,7 @@ def preprocess_followers(followers_data: pd.DataFrame) -> nx.DiGraph:
     return graph
 
 
-def preprocess_companies(companies: pd.DataFrame) -> pd.DataFrame:
-    """Preprocesses the data for companies.
-
-    Args:
-        companies: Raw data.
-    Returns:
-        Preprocessed data, with `company_rating` converted to a float and
-        `iata_approved` converted to boolean.
-    """
-    companies["iata_approved"] = _is_true(companies["iata_approved"])
-    companies["company_rating"] = _parse_percentage(companies["company_rating"])
-    return companies
-
-
-def preprocess_shuttles(shuttles: pd.DataFrame) -> pd.DataFrame:
-    """Preprocesses the data for shuttles.
-
-    Args:
-        shuttles: Raw data.
-    Returns:
-        Preprocessed data, with `price` converted to a float and `d_check_complete`,
-        `moon_clearance_complete` converted to boolean.
-    """
-    shuttles["d_check_complete"] = _is_true(shuttles["d_check_complete"])
-    shuttles["moon_clearance_complete"] = _is_true(shuttles["moon_clearance_complete"])
-    shuttles["price"] = _parse_money(shuttles["price"])
-    return shuttles
-
-
-def create_model_input_table(
-    shuttles: pd.DataFrame, companies: pd.DataFrame, reviews: pd.DataFrame
-) -> pd.DataFrame:
-    """Combines all data to create a model input table.
-
-    Args:
-        shuttles: Preprocessed data for shuttles.
-        companies: Preprocessed data for companies.
-        reviews: Raw data for reviews.
-    Returns:
-        Model input table.
-
-    """
-    rated_shuttles = shuttles.merge(reviews, left_on="id", right_on="shuttle_id")
-    rated_shuttles = rated_shuttles.drop("id", axis=1)
-    model_input_table = rated_shuttles.merge(
-        companies, left_on="company_id", right_on="id"
-    )
-    model_input_table = model_input_table.dropna()
-    return model_input_table
-
-
-def construct_fashion_knowledge_base(fashion_entities: pd.DataFrame) -> InMemoryLookupKB:
+def construct_fashion_knowledge_base(fashion_entities: pd.DataFrame, kb_path: str = None) -> InMemoryLookupKB:
     """Construct a knowledge base for fashion terminology.
     
     Args:
@@ -121,6 +55,7 @@ def construct_fashion_knowledge_base(fashion_entities: pd.DataFrame) -> InMemory
             - name: Canonical name of the entity (e.g., "Minimalist Style")
             - aliases: Pipe-separated list of aliases (e.g., "minimalist style||minimalist fashion")
             - vector: Entity vector representation (optional)
+        kb_path: Optional path to load/save knowledge base file
     
     Returns:
         InMemoryLookupKB: A knowledge base containing fashion entities and their aliases.
@@ -130,6 +65,14 @@ def construct_fashion_knowledge_base(fashion_entities: pd.DataFrame) -> InMemory
     
     # Initialize knowledge base
     kb = InMemoryLookupKB(nlp.vocab, entity_vector_length=1)
+    
+    # Try to load existing knowledge base if path is provided
+    if kb_path and os.path.exists(kb_path):
+        try:
+            kb.from_disk(kb_path)
+            return kb
+        except Exception as e:
+            print(f"Failed to load existing knowledge base: {e}")
     
     # Add entities and aliases to knowledge base
     for _, row in fashion_entities.iterrows():
@@ -148,6 +91,15 @@ def construct_fashion_knowledge_base(fashion_entities: pd.DataFrame) -> InMemory
                 entities=[row['entity_id']],
                 probabilities=[1.0]
             )
+    
+    # Save the knowledge base if path is provided
+    if kb_path:
+        try:
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(kb_path), exist_ok=True)
+            kb.to_disk(kb_path)
+        except Exception as e:
+            print(f"Failed to save knowledge base: {e}")
     
     return kb
 
@@ -172,32 +124,30 @@ def link_fashion_entities(text: str, kb: InMemoryLookupKB) -> list:
     
     # Split text into potential phrases (2-3 words)
     words = text.lower().split()
+    spans_to_check = []
+    
+    # Collect all spans to check
     for i in range(len(words)):
         # Try 2-word phrases
         if i + 1 < len(words):
-            phrase = " ".join(words[i:i+2])
-            span = doc[i:i+2]
-            candidates = kb.get_candidates(span)
-            if candidates:
-                best_candidate = max(candidates, key=lambda x: x.prior_prob)
-                fashion_mentions.append({
-                    "text": phrase,
-                    "entity_id": best_candidate.entity_,
-                    "confidence": best_candidate.prior_prob
-                })
+            spans_to_check.append(doc[i:i+2])
         
         # Try 3-word phrases
         if i + 2 < len(words):
-            phrase = " ".join(words[i:i+3])
-            span = doc[i:i+3]
-            candidates = kb.get_candidates(span)
-            if candidates:
-                best_candidate = max(candidates, key=lambda x: x.prior_prob)
-                fashion_mentions.append({
-                    "text": phrase,
-                    "entity_id": best_candidate.entity_,
-                    "confidence": best_candidate.prior_prob
-                })
+            spans_to_check.append(doc[i:i+3])
+    
+    # Get candidates for all spans in batch
+    candidates_batch = kb.get_candidates_batch(spans_to_check)
+    
+    # Process results
+    for span, candidates in zip(spans_to_check, candidates_batch):
+        if candidates:
+            best_candidate = max(candidates, key=lambda x: x.prior_prob)
+            fashion_mentions.append({
+                "text": span.text,
+                "entity_id": best_candidate.entity_,
+                "confidence": best_candidate.prior_prob
+            })
     
     # Remove duplicates while preserving order
     seen = set()
@@ -209,12 +159,13 @@ def link_fashion_entities(text: str, kb: InMemoryLookupKB) -> list:
     
     return unique_mentions
 
-def extract_keyword_from_bio(users: pd.DataFrame, fashion_entities: pd.DataFrame) -> pd.DataFrame:
+def extract_keyword_from_bio(users: pd.DataFrame, fashion_entities: pd.DataFrame, kb_path: str = None) -> pd.DataFrame:
     """Extract key phrases from user bios and link them to fashion terminology.
     
     Args:
         users: DataFrame containing user profiles with 'bio' column.
         fashion_entities: DataFrame containing fashion entities and their aliases.
+        kb_path: Optional path to load/save knowledge base file
     
     Returns:
         DataFrame with additional 'extracted_keywords' and 'fashion_entities' columns
@@ -230,7 +181,7 @@ def extract_keyword_from_bio(users: pd.DataFrame, fashion_entities: pd.DataFrame
     nlp.add_pipe("textrank", last=True)
     
     # Construct fashion knowledge base
-    fashion_kb = construct_fashion_knowledge_base(fashion_entities)
+    fashion_kb = construct_fashion_knowledge_base(fashion_entities, kb_path)
     
     def extract_and_link_phrases(text):
         """Extract key phrases and link them to fashion entities."""
@@ -274,97 +225,47 @@ def extract_keyword_from_bio(users: pd.DataFrame, fashion_entities: pd.DataFrame
     return users_with_keywords
 
 
-def compute_authority_score(
-    graph: nx.DiGraph,
-    users_with_keywords: pd.DataFrame
-) -> pd.DataFrame:
-    """Compute authority scores using the Fast Algorithm for Interest Propagation.
-    
-    This algorithm computes authority scores in three passes:
-    1. Compute explainable authority scores (Fe) based on known interests
-    2. Infer broader interests (Si) for all users
-    3. Compute broader authority scores (Fi) based on inferred interests
+def compute_authority_score(graph: nx.DiGraph, users: pd.DataFrame) -> pd.DataFrame:
+    """Compute authority scores for users based on their network position and topics.
     
     Args:
-        graph: Directed graph representing follower relationships
-        users_with_keywords: DataFrame containing user profiles with extracted keywords
-    
-    Returns:
-        DataFrame containing authority scores for each user and topic
-    """
-    import numpy as np
-    
-    # Get unique topics from all users
-    all_topics = set()
-    for topics in users_with_keywords['topics_of_interest'].dropna():
-        all_topics.update(topics.split('||'))
-    topics_list = sorted(list(all_topics))
-    
-    # Initialize matrices
-    n_users = len(graph.nodes())
-    n_topics = len(topics_list)
-    
-    # Create topic to index mapping
-    topic_to_idx = {topic: idx for idx, topic in enumerate(topics_list)}
-    
-    # Initialize Sc (clamped interests) matrix
-    Sc = np.zeros((n_topics, n_users))
-    user_to_idx = {user: idx for idx, user in enumerate(graph.nodes())}
-    
-    # Fill Sc matrix with known interests
-    for _, row in users_with_keywords.iterrows():
-        if pd.notna(row['topics_of_interest']):
-            user_idx = user_to_idx[row['user_id']]
-            for topic in row['topics_of_interest'].split('||'):
-                if topic in topic_to_idx:
-                    Sc[topic_to_idx[topic], user_idx] = 1
-    
-    # PASS 1: Compute explainable authority scores (Fe)
-    Fe = np.zeros((n_topics, n_users))
-    for v in graph.nodes():
-        v_idx = user_to_idx[v]
-        followers_with_interests = [u for u in graph.predecessors(v) 
-                                 if any(Sc[:, user_to_idx[u]] > 0)]
+        graph: NetworkX DiGraph representing the follower network
+        users: DataFrame containing user information with extracted keywords
         
-        if followers_with_interests:
-            min_v = len(followers_with_interests)
-            for u in followers_with_interests:
-                u_idx = user_to_idx[u]
-                Fe[:, v_idx] += Sc[:, u_idx]
-            Fe[:, v_idx] /= min_v
+    Returns:
+        DataFrame with authority scores for each user and topic
+    """
+    # Initialize scores DataFrame
+    all_topics = set()
+    for topics in users['topics_of_interest'].dropna():
+        all_topics.update(topics.split('||'))
     
-    # PASS 2: Compute broader interests (Si)
-    Si = np.zeros((n_topics, n_users))
-    for u in graph.nodes():
-        u_idx = user_to_idx[u]
-        following = list(graph.successors(u))
-        if following:
-            nout_u = len(following)
-            for v in following:
-                v_idx = user_to_idx[v]
-                Si[:, u_idx] += Fe[:, v_idx]
-            Si[:, u_idx] /= nout_u
+    scores = pd.DataFrame(0.0, index=graph.nodes(), columns=sorted(all_topics))
     
-    # PASS 3: Compute broader authority scores (Fi)
-    Fi = np.zeros((n_topics, n_users))
-    for v in graph.nodes():
-        v_idx = user_to_idx[v]
-        followers = list(graph.predecessors(v))
-        if followers:
-            nin_v = len(followers)
-            for u in followers:
-                u_idx = user_to_idx[u]
-                Fi[:, v_idx] += Si[:, u_idx]
-            Fi[:, v_idx] /= nin_v
+    # Compute PageRank for each user
+    pagerank_scores = nx.pagerank(graph)
     
-    # Final authority scores
-    F = Fe + Fi
+    # Compute topic-specific authority scores
+    for user in graph.nodes():
+        if user not in users['user_id'].values:
+            continue
+            
+        user_data = users[users['user_id'] == user].iloc[0]
+        user_topics = user_data['topics_of_interest'].split('||') if pd.notna(user_data['topics_of_interest']) else []
+        
+        # Base score from PageRank
+        base_score = pagerank_scores[user]
+        
+        # Distribute score across user's topics
+        for topic in user_topics:
+            if topic in scores.columns:
+                # Normalize the score to ensure it's between 0 and 1
+                scores.loc[user, topic] = min(base_score, 1.0)
     
-    # Convert to DataFrame
-    authority_scores = pd.DataFrame(
-        F.T,
-        index=graph.nodes(),
-        columns=topics_list
-    )
+    # Normalize all scores to ensure they're between 0 and 1
+    for column in scores.columns:
+        max_score = scores[column].max()
+        if max_score > 0:
+            scores[column] = scores[column] / max_score
     
-    return authority_scores
+    return scores
