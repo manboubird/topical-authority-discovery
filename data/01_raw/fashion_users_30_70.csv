@@ -1,0 +1,101 @@
+user_id,followers,topics
+authority_001,1500,Upcycled Fashion
+authority_002,900,Minimalist Fashion
+user_001,70,Bohemian Style
+user_002,60,Athleisure Wear
+user_003,50,Retro Fashion
+user_006,2061,"Luxury Brands,Upcycled Fashion"
+user_007,724,"Streetwear,Fashion Sustainability"
+user_008,1962,"Monochrome Outfits,Athleisure Wear"
+user_009,2112,"Minimalist Fashion,Fast Fashion,Fashion Collaborations,Fashion Hacks"
+user_010,1053,"Fashion Hacks,Layering Techniques,Fashion Resale,Digital Fashion"
+user_011,1420,"Athleisure Wear,Fashion Week Highlights,Luxury Brands,Sustainable Fashion"
+user_012,116,"Capsule Wardrobe,Minimalist Fashion"
+user_013,1445,"Statement Pieces,Street Style,Color Blocking"
+user_014,1021,"Fashion Week Highlights,Virtual Fashion Shows,Athleisure Wear"
+user_015,1680,"Athleisure Wear,Virtual Fashion Shows,Athleisure"
+user_016,2108,"Minimalist Fashion,Sustainable Fashion,Fast Fashion"
+user_017,1066,Street Style
+user_018,1043,Virtual Fashion Shows
+user_019,1045,"Fashion NFTs,Athleisure Wear,Fashion Sustainability,Bohemian Style"
+user_020,1858,"Fashion NFTs,Digital Fashion"
+user_021,1297,Vintage Fashion
+user_022,606,"Fashion Collaborations,Retro Fashion,Monochrome Outfits,Layering Techniques,Upcycled Fashion"
+user_023,1653,"Fashion NFTs,Layering Techniques,High Fashion,Seasonal Trends"
+user_024,1608,"Vintage Fashion,Street Style"
+user_025,1242,"Retro Fashion,Bohemian Style"
+user_026,2187,"Digital Fashion,Layering Techniques,Gender-Neutral Fashion,Seasonal Trends,Ethical Fashion"
+user_027,1385,"Seasonal Trends,Fast Fashion,Retro Fashion"
+user_028,314,"Statement Pieces,Bohemian Style"
+user_029,1007,"Athleisure Wear,Monochrome Outfits,Ethical Fashion,Virtual Fashion Shows"
+user_030,1176,"Fashion Collaborations,Fashion Sustainability,Capsule Wardrobe,Street Style"
+user_031,342,"Streetwear,Digital Fashion,Influencer Style,Statement Pieces,Monochrome Outfits"
+user_032,1268,"High Fashion,Fashion Collaborations,Layering Techniques,Gender-Neutral Fashion,Vintage Fashion"
+user_033,1837,"Layering Techniques,Monochrome Outfits,High Fashion"
+user_034,1021,"Fashion Sustainability,Fashion Week Highlights,Fashion Resale,Vintage Fashion"
+user_035,186,"Fashion Week Highlights,Capsule Wardrobe,Retro Fashion,Fashion Resale,Fashion Collaborations"
+user_036,1692,"Fashion Hacks,Capsule Wardrobe,Fashion Resale,Monochrome Outfits"
+user_037,827,"Fashion Week Highlights,Upcycled Fashion,Athleisure,Statement Pieces"
+user_038,728,"Bohemian Style,Fashion Week Highlights,Layering Techniques,Influencer Style"
+user_039,1146,"Statement Pieces,Athleisure"
+user_040,1002,"Luxury Brands,Monochrome Outfits"
+user_041,211,"Fashion Collaborations,Fashion Week Highlights,Upcycled Fashion,Digital Fashion"
+user_042,835,"Ethical Fashion,Fashion Week Highlights"
+user_043,1988,Upcycled Fashion
+user_044,1003,"Statement Pieces,Sustainable Fashion,Athleisure Wear,Digital Fashion"
+user_045,1538,Statement Pieces
+user_046,2357,"Fashion NFTs,Color Blocking,Digital Fashion,Seasonal Trends"
+user_047,961,Seasonal Trends
+user_048,2091,Digital Fashion
+user_049,2489,"Fashion NFTs,Fashion Week Highlights,Sustainable Fashion"
+user_050,448,"Ethical Fashion,Fashion Hacks,Color Blocking"
+user_051,120,Fashion Sustainability
+user_052,809,"Monochrome Outfits,Bohemian Style,Fashion Sustainability,Seasonal Trends"
+user_053,1722,"Sustainable Fashion,Streetwear,Luxury Brands"
+user_054,1746,"Streetwear,Monochrome Outfits"
+user_055,757,"Street Style,Bohemian Style"
+user_056,1501,"Digital Fashion,Vintage Fashion,Seasonal Trends,Monochrome Outfits,Athleisure Wear"
+user_057,1702,"Streetwear,Layering Techniques"
+user_058,2228,Vintage Fashion
+user_059,443,"Upcycled Fashion,Virtual Fashion Shows,Color Blocking"
+user_060,2320,"Capsule Wardrobe,Fast Fashion"
+user_061,1237,"Street Style,Vintage Fashion,Sustainable Fashion"
+user_062,1677,"Fashion Sustainability,Streetwear,Digital Fashion,Seasonal Trends"
+user_063,1429,Capsule Wardrobe
+user_064,2053,Minimalist Fashion
+user_065,54,"High Fashion,Fashion Sustainability,Fashion Week Highlights,Streetwear"
+user_066,91,"Statement Pieces,Athleisure Wear"
+user_067,2030,"Influencer Style,Athleisure Wear,Fashion Sustainability"
+user_068,2224,"Fashion NFTs,Sustainable Fashion,Monochrome Outfits"
+user_069,681,"Fast Fashion,Fashion Sustainability,Statement Pieces,Fashion Week Highlights,High Fashion"
+user_070,413,"Fashion Hacks,Layering Techniques,Gender-Neutral Fashion,Influencer Style,Fashion Resale"
+user_071,840,Minimalist Fashion
+user_072,281,Virtual Fashion Shows
+user_073,541,"Minimalist Fashion,Seasonal Trends"
+user_074,1316,"Statement Pieces,Fashion Collaborations,Gender-Neutral Fashion,Fashion Sustainability"
+user_075,1386,"Luxury Brands,Layering Techniques,Virtual Fashion Shows,Color Blocking,Statement Pieces"
+user_076,1269,"High Fashion,Fashion Collaborations"
+user_077,2385,"Athleisure Wear,Color Blocking,Vintage Fashion"
+user_078,1322,"Fashion Week Highlights,Upcycled Fashion,Street Style,Athleisure Wear,Fashion Collaborations"
+user_079,67,"Fashion Resale,Seasonal Trends"
+user_080,1075,"Minimalist Fashion,Fashion NFTs,Bohemian Style"
+user_081,543,"Street Style,Vintage Fashion"
+user_082,707,"Monochrome Outfits,Bohemian Style,Street Style,Vintage Fashion,Athleisure"
+user_083,2065,"Vintage Fashion,Minimalist Fashion"
+user_084,154,Capsule Wardrobe
+user_085,933,"Retro Fashion,Fast Fashion,Ethical Fashion,Fashion Collaborations,Sustainable Fashion"
+user_086,706,Fashion Week Highlights
+user_087,527,"Fashion Resale,High Fashion,Color Blocking,Minimalist Fashion,Seasonal Trends"
+user_088,331,"Retro Fashion,Capsule Wardrobe,Fashion Week Highlights,Street Style"
+user_089,2165,"Sustainable Fashion,Color Blocking,Retro Fashion"
+user_090,1737,"Sustainable Fashion,Seasonal Trends"
+user_091,2155,"Fashion Week Highlights,Influencer Style"
+user_092,1518,"Digital Fashion,Vintage Fashion,Gender-Neutral Fashion"
+user_093,1539,"Influencer Style,Seasonal Trends,Minimalist Fashion"
+user_094,142,"Seasonal Trends,Digital Fashion,Statement Pieces,High Fashion,Fashion Collaborations"
+user_095,1713,"Streetwear,Fashion Hacks,Luxury Brands"
+user_096,1662,"Minimalist Fashion,Ethical Fashion,Fashion Week Highlights"
+user_097,300,Fashion Hacks
+user_098,1095,"Athleisure,Fashion Hacks,Fashion NFTs"
+user_099,2370,"Luxury Brands,Retro Fashion"
+user_100,1997,"Retro Fashion,Vintage Fashion"

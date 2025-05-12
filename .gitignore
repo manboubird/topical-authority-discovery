@@ -21,6 +21,17 @@ data/**
 !data/01_raw/followers.csv
 !data/01_raw/users.csv
 !data/01_raw/fashion_entities.csv
+!data/01_raw/fashion_followers_10_90.csv
+!data/01_raw/fashion_followers_20_80.csv
+!data/01_raw/fashion_followers_30_70.csv
+!data/01_raw/fashion_followers_40_60.csv
+!data/01_raw/fashion_followers_50_50.csv
+!data/01_raw/fashion_users_10_90.csv
+!data/01_raw/fashion_users_20_80.csv
+!data/01_raw/fashion_users_30_70.csv
+!data/01_raw/fashion_users_40_60.csv
+!data/01_raw/fashion_users_50_50.csv
+
 
 # ignore kedro-viz metadata
 .viz

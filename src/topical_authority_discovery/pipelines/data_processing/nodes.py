@@ -225,47 +225,97 @@ def extract_keyword_from_bio(users: pd.DataFrame, fashion_entities: pd.DataFrame
     return users_with_keywords
 
 
-def compute_authority_score(graph: nx.DiGraph, users: pd.DataFrame) -> pd.DataFrame:
-    """Compute authority scores for users based on their network position and topics.
+def compute_authority_score(
+    graph: nx.DiGraph,
+    users_with_keywords: pd.DataFrame
+) -> pd.DataFrame:
+    """Compute authority scores using the Fast Algorithm for Interest Propagation.
+    
+    This algorithm computes authority scores in three passes:
+    1. Compute explainable authority scores (Fe) based on known interests
+    2. Infer broader interests (Si) for all users
+    3. Compute broader authority scores (Fi) based on inferred interests
     
     Args:
-        graph: NetworkX DiGraph representing the follower network
-        users: DataFrame containing user information with extracted keywords
-        
+        graph: Directed graph representing follower relationships
+        users_with_keywords: DataFrame containing user profiles with extracted keywords
+    
     Returns:
-        DataFrame with authority scores for each user and topic
+        DataFrame containing authority scores for each user and topic
     """
-    # Initialize scores DataFrame
+    import numpy as np
+    
+    # Get unique topics from all users
     all_topics = set()
-    for topics in users['topics_of_interest'].dropna():
+    for topics in users_with_keywords['topics_of_interest'].dropna():
         all_topics.update(topics.split('||'))
+    topics_list = sorted(list(all_topics))
     
-    scores = pd.DataFrame(0.0, index=graph.nodes(), columns=sorted(all_topics))
+    # Initialize matrices
+    n_users = len(graph.nodes())
+    n_topics = len(topics_list)
     
-    # Compute PageRank for each user
-    pagerank_scores = nx.pagerank(graph)
+    # Create topic to index mapping
+    topic_to_idx = {topic: idx for idx, topic in enumerate(topics_list)}
     
-    # Compute topic-specific authority scores
-    for user in graph.nodes():
-        if user not in users['user_id'].values:
-            continue
-            
-        user_data = users[users['user_id'] == user].iloc[0]
-        user_topics = user_data['topics_of_interest'].split('||') if pd.notna(user_data['topics_of_interest']) else []
+    # Initialize Sc (clamped interests) matrix
+    Sc = np.zeros((n_topics, n_users))
+    user_to_idx = {user: idx for idx, user in enumerate(graph.nodes())}
+    
+    # Fill Sc matrix with known interests
+    for _, row in users_with_keywords.iterrows():
+        if pd.notna(row['topics_of_interest']):
+            user_idx = user_to_idx[row['user_id']]
+            for topic in row['topics_of_interest'].split('||'):
+                if topic in topic_to_idx:
+                    Sc[topic_to_idx[topic], user_idx] = 1
+    
+    # PASS 1: Compute explainable authority scores (Fe)
+    Fe = np.zeros((n_topics, n_users))
+    for v in graph.nodes():
+        v_idx = user_to_idx[v]
+        followers_with_interests = [u for u in graph.predecessors(v) 
+                                 if any(Sc[:, user_to_idx[u]] > 0)]
         
-        # Base score from PageRank
-        base_score = pagerank_scores[user]
-        
-        # Distribute score across user's topics
-        for topic in user_topics:
-            if topic in scores.columns:
-                # Normalize the score to ensure it's between 0 and 1
-                scores.loc[user, topic] = min(base_score, 1.0)
+        if followers_with_interests:
+            min_v = len(followers_with_interests)
+            for u in followers_with_interests:
+                u_idx = user_to_idx[u]
+                Fe[:, v_idx] += Sc[:, u_idx]
+            Fe[:, v_idx] /= min_v
     
-    # Normalize all scores to ensure they're between 0 and 1
-    for column in scores.columns:
-        max_score = scores[column].max()
-        if max_score > 0:
-            scores[column] = scores[column] / max_score
+    # PASS 2: Compute broader interests (Si)
+    Si = np.zeros((n_topics, n_users))
+    for u in graph.nodes():
+        u_idx = user_to_idx[u]
+        following = list(graph.successors(u))
+        if following:
+            nout_u = len(following)
+            for v in following:
+                v_idx = user_to_idx[v]
+                Si[:, u_idx] += Fe[:, v_idx]
+            Si[:, u_idx] /= nout_u
     
-    return scores
+    # PASS 3: Compute broader authority scores (Fi)
+    Fi = np.zeros((n_topics, n_users))
+    for v in graph.nodes():
+        v_idx = user_to_idx[v]
+        followers = list(graph.predecessors(v))
+        if followers:
+            nin_v = len(followers)
+            for u in followers:
+                u_idx = user_to_idx[u]
+                Fi[:, v_idx] += Si[:, u_idx]
+            Fi[:, v_idx] /= nin_v
+    
+    # Final authority scores
+    F = Fe + Fi
+    
+    # Convert to DataFrame
+    authority_scores = pd.DataFrame(
+        F.T,
+        index=graph.nodes(),
+        columns=topics_list
+    )
+    
+    return authority_scores

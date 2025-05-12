@@ -11,6 +11,118 @@ from topical_authority_discovery.pipelines.data_processing.nodes import (
 import os
 import tempfile
 from pathlib import Path
+import random
+
+
+# Fixture to ensure CSV files have 100 users
+@pytest.fixture(scope='session', autouse=True)
+def setup_csv_files():
+    """Setup fixture to ensure each fashion user CSV file has 100 users."""
+    topics = [
+        "Streetwear", "Sustainable Fashion", "High Fashion", "Fast Fashion", "Vintage Fashion",
+        "Athleisure", "Luxury Brands", "Capsule Wardrobe", "Gender-Neutral Fashion",
+        "Upcycled Fashion", "Minimalist Fashion", "Bohemian Style", "Athleisure Wear",
+        "Retro Fashion", "Statement Pieces", "Color Blocking", "Monochrome Outfits",
+        "Layering Techniques", "Fashion Collaborations", "Influencer Style",
+        "Fashion Hacks", "Seasonal Trends", "Fashion Week Highlights", "Street Style",
+        "Fashion Sustainability", "Ethical Fashion", "Fashion Resale", "Digital Fashion",
+        "Virtual Fashion Shows", "Fashion NFTs"
+    ]
+
+    def add_users_to_csv(filename, total_users=100):
+        # Create the directory if it doesn't exist
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+
+        # Load existing data or create a new DataFrame if the file doesn't exist
+        if os.path.exists(filename):
+            df = pd.read_csv(filename)
+            existing_users = df['user_id'].tolist()
+        else:
+            df = pd.DataFrame(columns=["user_id", "followers", "topics"])
+            existing_users = []
+
+        # Calculate how many more users are needed
+        num_existing = len(existing_users)
+        num_to_add = total_users - num_existing
+        
+        # Generate new users
+        new_users = []
+        for i in range(num_existing, total_users):
+            user_id = f'user_{str(i + 1).zfill(3)}'
+            followers = random.randint(30, 2500)  # Random followers between 30 and 2500
+            user_topics = random.sample(topics, k=random.randint(1, 5))  # Randomly select 1 to 5 topics
+            new_users.append([user_id, followers, ','.join(user_topics)])
+        
+        # Create a DataFrame for new users
+        new_users_df = pd.DataFrame(new_users, columns=["user_id", "followers", "topics"])
+        
+        # Combine existing and new users
+        updated_df = pd.concat([df, new_users_df], ignore_index=True)
+        
+        # Save the updated DataFrame back to CSV
+        updated_df.to_csv(filename, index=False)
+
+    def add_followers_to_csv(filename, num_users=100, authority_ratio=0.5):
+        # Create the directory if it doesn't exist
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+
+        # Generate followers data
+        num_authority = int(num_users * authority_ratio)
+        data = []
+        
+        print(f"Creating followers for {num_users} users with authority ratio of {authority_ratio}.")
+        print(f"Number of authority users: {num_authority}")
+
+        # Create followers for authority users
+        for i in range(num_authority):
+            authority_user = f'authority_{str(i + 1).zfill(3)}'
+            print(f"Adding followers for authority user: {authority_user}")
+            # Randomly select followers from both authority and regular users
+            for _ in range(random.randint(1, 5)):  # Each authority user has 1 to 5 followers
+                follower_id = f'user_{str(random.randint(1, num_users)).zfill(3)}'
+                data.append([follower_id, authority_user])
+                print(f"  Added follower: {follower_id} to {authority_user}")
+        
+        # Create followers for regular users
+        for i in range(num_authority, num_users):
+            regular_user = f'user_{str(i + 1).zfill(3)}'
+            print(f"Adding followers for regular user: {regular_user}")
+            # Randomly select followers from authority users
+            for _ in range(random.randint(1, 3)):  # Each regular user has 1 to 3 followers
+                followed_id = f'authority_{str(random.randint(1, num_authority)).zfill(3)}'
+                data.append([regular_user, followed_id])
+                print(f"  Added follower: {regular_user} to {followed_id}")
+        
+        df = pd.DataFrame(data, columns=["follower_id", "followed_id"])  # Ensure correct column names
+        df.to_csv(filename, index=False)
+        print(f"Followers data saved to {filename} with {len(data)} entries.")
+
+    # List of CSV files to update
+    user_csv_files = [
+        'data/01_raw/fashion_users_10_90.csv',
+        'data/01_raw/fashion_users_20_80.csv',
+        'data/01_raw/fashion_users_30_70.csv',
+        'data/01_raw/fashion_users_40_60.csv',
+        'data/01_raw/fashion_users_50_50.csv'
+    ]
+
+    follower_csv_files = [
+        'data/01_raw/fashion_followers_10_90.csv',
+        'data/01_raw/fashion_followers_20_80.csv',
+        'data/01_raw/fashion_followers_30_70.csv',
+        'data/01_raw/fashion_followers_40_60.csv',
+        'data/01_raw/fashion_followers_50_50.csv'
+    ]
+
+    # Update each user CSV file
+    for file in user_csv_files:
+        add_users_to_csv(file)
+
+    # Create each follower CSV file
+    for file in follower_csv_files:
+        add_followers_to_csv(file, num_users=100, authority_ratio=0.5)
+
+    print("All CSV files have been updated to contain 100 users and followers.")
 
 
 @pytest.fixture
@@ -24,32 +136,43 @@ def sample_followers_data():
 
 @pytest.fixture
 def sample_users_data():
-    """Create sample users data with bios and topics."""
-    return pd.DataFrame({
-        'user_id': ['user1', 'user2', 'user3', 'user4', 'authority1', 'authority2', 'fashion1', 'fashion2', 'fashion3'],
-        'bio': [
-            'AI enthusiast and machine learning practitioner',
-            'Data scientist working on big data projects',
-            'Software engineer interested in AI and ML',
-            'Research scientist in data analytics',
-            'AI researcher with 10+ years experience in deep learning',
-            'Data Science expert specializing in big data analytics',
-            'Fashion designer specializing in minimalist style and sustainable fashion',
-            'Streetwear enthusiast and urban style influencer',
-            'Vintage fashion collector and retro style expert'
-        ],
-        'topics_of_interest': [
-            'AI||MachineLearning',
-            'DataScience||BigData',
-            'AI||MachineLearning',
-            'DataScience||Statistics',
-            'AI||MachineLearning||DeepLearning',
-            'DataScience||Statistics||BigData',
-            'Fashion||Minimalism||Sustainable',
-            'Fashion||Streetwear||Urban',
-            'Fashion||Vintage||Retro'
-        ]
-    })
+    """Create sample users data with unique bios and topics."""
+    unique_bios = [
+        'AI enthusiast and machine learning practitioner',
+        'Data scientist working on big data projects',
+        'Software engineer interested in AI and ML',
+        'Research scientist in data analytics',
+        'AI researcher with 10+ years experience in deep learning',
+        'Data Science expert specializing in big data analytics',
+        'Fashion designer specializing in minimalist style and sustainable fashion',
+        'Streetwear enthusiast and urban style influencer',
+        'Vintage fashion collector and retro style expert',
+        'Fashion blogger sharing the latest trends and styles',
+        'Sustainable fashion advocate promoting eco-friendly brands',
+        'Fashion photographer capturing street style and runway shows',
+        'Fashion stylist helping clients find their unique style',
+        'Fashion entrepreneur launching a new clothing line',
+        'Fashion historian exploring the evolution of style',
+        'Fashion influencer collaborating with brands on social media',
+        'Fashion researcher studying consumer behavior in fashion',
+        'Fashion educator teaching courses on design and marketing',
+        'Fashion critic reviewing collections and runway shows',
+        'Fashion event planner organizing fashion shows and exhibitions'
+    ]
+
+    # Generate user IDs and ensure unique bios
+    users = []
+    for i in range(len(unique_bios)):
+        user_id = f'user_{str(i + 1).zfill(3)}'
+        bio = unique_bios[i]
+        topics_of_interest = random.sample(['AI', 'MachineLearning', 'DataScience', 'BigData', 'Fashion', 'Sustainable', 'Streetwear', 'Vintage'], k=random.randint(1, 3))
+        users.append({
+            'user_id': user_id,
+            'bio': bio,
+            'topics_of_interest': '||'.join(topics_of_interest)
+        })
+
+    return pd.DataFrame(users)
 
 
 @pytest.fixture
@@ -762,4 +885,77 @@ def test_link_fashion_entities_with_phrases(fashion_entities_data):
         if phrase in expected_entities:
             assert len(entities) > 0, f"No entities found for phrase: {phrase}"
             assert any(entity['entity_id'] == expected_entities[phrase] for entity in entities), \
-                f"Expected entity {expected_entities[phrase]} not found for phrase: {phrase}" 
+                f"Expected entity {expected_entities[phrase]} not found for phrase: {phrase}"
+
+
+def test_create_fashion_followers_csv():
+    num_users = 100  # Total number of users
+
+    # Function to create followers CSV files
+    def create_fashion_followers_csv(filename, num_users, authority_ratio):
+        num_authority = int(num_users * authority_ratio)
+        data = []
+        
+        # Create followers for authority users
+        for i in range(num_authority):
+            authority_user = f'authority_{str(i + 1).zfill(3)}'
+            # Randomly select followers from both authority and regular users
+            for _ in range(random.randint(1, 5)):  # Each authority user has 1 to 5 followers
+                follower_id = f'user_{str(random.randint(1, num_users)).zfill(3)}'
+                data.append([follower_id, authority_user])
+        
+        # Create followers for regular users
+        for i in range(num_authority, num_users):
+            regular_user = f'user_{str(i + 1).zfill(3)}'
+            # Randomly select followers from authority users
+            for _ in range(random.randint(1, 3)):  # Each regular user has 1 to 3 followers
+                followed_id = f'authority_{str(random.randint(1, num_authority)).zfill(3)}'
+                data.append([regular_user, followed_id])
+        
+        df = pd.DataFrame(data, columns=["follower_id", "followed_id"])
+        df.to_csv(filename, index=False)
+
+    # Create the followers CSV files
+    create_fashion_followers_csv('data/01_raw/fashion_followers_10_90.csv', num_users, 0.1)
+    create_fashion_followers_csv('data/01_raw/fashion_followers_20_80.csv', num_users, 0.2)
+    create_fashion_followers_csv('data/01_raw/fashion_followers_30_70.csv', num_users, 0.3)
+    create_fashion_followers_csv('data/01_raw/fashion_followers_40_60.csv', num_users, 0.4)
+    create_fashion_followers_csv('data/01_raw/fashion_followers_50_50.csv', num_users, 0.5)
+
+    # Verify that the files were created successfully
+    for i in range(1, 6):
+        filename = f'data/01_raw/fashion_followers_{i * 10}_90.csv' if i < 5 else 'data/01_raw/fashion_followers_50_50.csv'
+        assert pd.read_csv(filename).shape[0] > 0  # Ensure the file is not empty
+
+
+# New test case for compute_authority_score using the CSV files
+@pytest.mark.parametrize("user_file, follower_file", [
+    ('data/01_raw/fashion_users_10_90.csv', 'data/01_raw/fashion_followers_10_90.csv'),
+    ('data/01_raw/fashion_users_20_80.csv', 'data/01_raw/fashion_followers_20_80.csv'),
+    ('data/01_raw/fashion_users_30_70.csv', 'data/01_raw/fashion_followers_30_70.csv'),
+    ('data/01_raw/fashion_users_40_60.csv', 'data/01_raw/fashion_followers_40_60.csv'),
+    ('data/01_raw/fashion_users_50_50.csv', 'data/01_raw/fashion_followers_50_50.csv'),
+])
+def test_compute_authority_score(user_file, follower_file):
+    """Test compute_authority_score with various user and follower datasets."""
+    
+    # Load user data
+    users_with_keywords = pd.read_csv(user_file)
+    
+    # Load follower data and preprocess to create a graph
+    followers_data = pd.read_csv(follower_file)
+    graph = preprocess_followers(followers_data)
+    
+    # Compute authority scores
+    authority_scores = compute_authority_score(graph, users_with_keywords)
+    
+    # Check that the authority scores DataFrame is not empty
+    assert authority_scores is not None
+    assert isinstance(authority_scores, pd.DataFrame)
+    assert not authority_scores.empty
+    
+    # Additional checks can be added here based on expected outcomes
+    # For example, checking the range of scores or specific conditions
+    assert 'score' in authority_scores.columns  # Ensure 'score' column exists
+    assert authority_scores['score'].min() >= 0  # Assuming scores are non-negative
+    assert authority_scores['score'].max() <= 1  # Assuming scores are normalized 
