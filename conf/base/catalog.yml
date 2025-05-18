@@ -19,6 +19,10 @@ users_with_keywords:
   # type: pandas.ParquetDataset
   # filepath: data/02_intermediate/users_with_keywords.parquet
 
+combined_users:
+  type: pandas.ParquetDataset
+  filepath: data/02_intermediate/combined_users.parquet
+
 authority_scores:
   type: pandas.CSVDataset
   filepath: data/02_intermediate/authority_scores.csv

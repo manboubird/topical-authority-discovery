@@ -159,11 +159,29 @@ def link_fashion_entities(text: str, kb: InMemoryLookupKB) -> list:
     
     return unique_mentions
 
+def combine_user_datasets(*user_datasets: pd.DataFrame) -> pd.DataFrame:
+    """Combine multiple user datasets into a single DataFrame.
+    
+    Args:
+        *user_datasets: Variable number of DataFrames containing user data
+        
+    Returns:
+        pd.DataFrame: Combined user dataset with unique user_ids
+    """
+    # Combine all datasets
+    combined_df = pd.concat(user_datasets, ignore_index=True)
+    
+    # Remove duplicates based on user_id, keeping the first occurrence
+    combined_df = combined_df.drop_duplicates(subset=['user_id'], keep='first')
+    
+    return combined_df
+
 def extract_keyword_from_bio(users: pd.DataFrame, fashion_entities: pd.DataFrame, kb_path: str = None) -> pd.DataFrame:
     """Extract key phrases from user bios and link them to fashion terminology.
     
     Args:
         users: DataFrame containing user profiles with 'bio' column.
+               Can be a single dataset or combined dataset from multiple sources.
         fashion_entities: DataFrame containing fashion entities and their aliases.
         kb_path: Optional path to load/save knowledge base file
     
@@ -177,7 +195,6 @@ def extract_keyword_from_bio(users: pd.DataFrame, fashion_entities: pd.DataFrame
     nlp = spacy.load("en_core_web_sm")
     
     # Add PyTextRank to the pipeline
-    # The pipe name "textrank" is registered by pytextrank package
     nlp.add_pipe("textrank", last=True)
     
     # Construct fashion knowledge base
@@ -221,6 +238,10 @@ def extract_keyword_from_bio(users: pd.DataFrame, fashion_entities: pd.DataFrame
     
     # Extract keywords and link fashion entities
     users_with_keywords[['extracted_keywords', 'fashion_entities']] = users_with_keywords['bio'].apply(extract_and_link_phrases)
+    
+    # Add source information if not present
+    if 'source_dataset' not in users_with_keywords.columns:
+        users_with_keywords['source_dataset'] = 'combined'
     
     return users_with_keywords
 

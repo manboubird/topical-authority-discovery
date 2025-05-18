@@ -5,6 +5,7 @@ from .nodes import (
     extract_keyword_from_bio,
     compute_authority_score,
     construct_fashion_knowledge_base,
+    combine_user_datasets,
 )
 
 
@@ -26,8 +27,15 @@ def create_pipeline(**kwargs) -> Pipeline:
                 tags=["preprocessing", "knowledge_base"],
             ),
             node(
+                func=combine_user_datasets,
+                inputs=["fashion_users_40_60", "users"],
+                outputs="combined_users",
+                name="combine_user_datasets_node",
+                tags=["preprocessing", "data_combination"],
+            ),
+            node(
                 func=extract_keyword_from_bio,
-                inputs=["users", "fashion_entities", "params:fashion_knowledge_base_path"],
+                inputs=["combined_users", "fashion_entities", "params:fashion_knowledge_base_path"],
                 outputs="users_with_keywords",
                 name="extract_keyword_from_bio_node",
                 tags=["preprocessing", "keyword_extraction"],
