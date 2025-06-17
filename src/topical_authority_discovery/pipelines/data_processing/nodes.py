@@ -9,6 +9,98 @@ from spacy.tokens import Span
 import numpy as np
 import pytextrank
 import os
+import ibis
+import pyarrow as pa
+from google.cloud import bigquery
+import logging
+import time
+from pathlib import Path
+import google.auth
+from google.api_core import exceptions
+import duckdb
+from ibis.expr.types import Table
+from google.oauth2 import service_account
+from kedro.framework.session import KedroSession
+from kedro.framework.startup import bootstrap_project
+from topical_authority_discovery.utils import get_bigquery_client, verify_bigquery_permissions, create_bigquery_query_job
+
+def load_bigquery_to_duckdb(
+    table_id: str,
+    limit: int = 100
+) -> ibis.expr.types.Table:
+    """
+    Load data from BigQuery to DuckDB using Ibis.
+    Gets parameters and credentials from Kedro context.
+    
+    Args:
+        table_id: Full BigQuery table ID (e.g., "project.dataset.table")
+        limit: Maximum number of rows to return
+    
+    Returns:
+        ibis.expr.types.Table: Ibis table object pointing to the DuckDB table
+    """
+    try:
+        # Get project path and bootstrap Kedro
+        project_path = Path.cwd()
+        bootstrap_project(project_path)
+        
+        # Create a session to access parameters and credentials
+        with KedroSession.create(project_path=project_path) as session:
+            context = session.load_context()
+            
+            # Get parameters and credentials
+            billing_project_id = context.params["bigquery"]["project_id"]
+            duckdb_path = context.params["duckdb_path"]
+            credentials = context.config_loader.get("credentials")
+            service_account_path = credentials["bigquery"]["service_account_path"]
+            
+            # Parse table_id into components
+            project_id, dataset_id, table_name = table_id.split('.')
+            
+            # Initialize BigQuery client
+            bq_client = get_bigquery_client(billing_project_id, service_account_path)
+            
+            # Verify permissions
+            verify_bigquery_permissions(bq_client, project_id, dataset_id, table_name)
+            
+            # Create DuckDB connection
+            con = duckdb.connect(duckdb_path)
+            
+            try:
+                # Execute query and measure time
+                start_time = time.time()
+                query_job = create_bigquery_query_job(
+                    bq_client,
+                    project_id,
+                    dataset_id,
+                    table_name,
+                    limit
+                )
+                
+                # Convert results to PyArrow table
+                pa_table = query_job.to_arrow()
+                elapsed_time = time.time() - start_time
+                logging.info(f"BigQuery query executed and data loaded in {elapsed_time:.2f} seconds")
+                
+                # Create table in DuckDB using a sanitized table name
+                duckdb_table_name = f"{dataset_id}_{table_name}".replace('-', '_')
+                con.execute(f"CREATE TABLE IF NOT EXISTS {duckdb_table_name} AS SELECT * FROM pa_table")
+                logging.info(f"Data successfully loaded into DuckDB table: {duckdb_table_name}")
+                
+                # Return Ibis table object
+                duckdb_ibis = ibis.duckdb.connect(duckdb_path)
+                return duckdb_ibis.table(duckdb_table_name)
+                
+            except exceptions.GoogleAPIError as e:
+                logging.error(f"Error executing BigQuery query: {str(e)}")
+                raise
+                
+    except Exception as e:
+        logging.error(f"Error loading data from BigQuery to DuckDB: {str(e)}")
+        raise
+    finally:
+        if 'con' in locals():
+            con.close()
 
 def preprocess_followers(followers_data: pd.DataFrame) -> nx.DiGraph:
     """Preprocesses the data for followers to create a directed graph.

@@ -1,3 +1,5 @@
-"""Complete Data Processing pipeline for the spaceflights tutorial"""
+"""This is a pipeline that processes data."""
 
-from .pipeline import create_pipeline  # NOQA
+from .pipeline import create_pipeline
+
+__all__ = ["create_pipeline"]

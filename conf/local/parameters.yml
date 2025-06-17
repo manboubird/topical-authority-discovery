@@ -1,0 +1,3 @@
+# Local BigQuery configuration
+bigquery:
+  project_id: "YOUR_GCP_PROJECT_ID"  # Billing project ID 

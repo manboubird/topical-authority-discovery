@@ -1,1 +1,13 @@
 fashion_knowledge_base_path: data/02_intermediate/fashion_knowledge_base
+
+# BigQuery configuration
+accuweather_table_id: "accuweather-com.sample.sample"
+accuweather_limit: 100
+
+google_trends_rising_table_id: "bigquery-public-data.google_trends.international_top_rising_terms"
+google_trends_rising_limit: 100
+
+google_trends_top_table_id: "bigquery-public-data.google_trends.international_top_terms"
+google_trends_top_limit: 100
+
+duckdb_path: "data/01_raw/sample.ddb"

@@ -5,6 +5,13 @@
 #
 # We support interacting with a variety of data stores including local file systems, cloud, network and HDFS
 #
+
+_root_folder: "PATH_TO_ROOT_DIR"
+
+_connection:
+  backend: duckdb
+  database: "${_root_folder}/data/01_raw/sample.ddb"
+
 followers:
   type: pandas.CSVDataset
   filepath: data/01_raw/followers.csv
@@ -13,21 +20,21 @@ users:
   type: pandas.CSVDataset
   filepath: data/01_raw/users.csv
 
-users_with_keywords:
+fashion_users_40_60:
   type: pandas.CSVDataset
-  filepath: data/02_intermediate/users_with_keywords.csv
-  # type: pandas.ParquetDataset
-  # filepath: data/02_intermediate/users_with_keywords.parquet
+  filepath: data/01_raw/fashion_users.csv
 
 combined_users:
   type: pandas.ParquetDataset
   filepath: data/02_intermediate/combined_users.parquet
 
+users_with_keywords:
+  type: pandas.ParquetDataset
+  filepath: data/02_intermediate/users_with_keywords.parquet
+
 authority_scores:
-  type: pandas.CSVDataset
-  filepath: data/02_intermediate/authority_scores.csv
-  # type: pandas.ParquetDataset
-  # filepath: data/02_intermediate/authority_scores.parquet
+  type: pandas.ParquetDataset
+  filepath: data/02_intermediate/authority_scores.parquet
 
 preprocessed_followers:
   type: networkx.GMLDataset
@@ -36,3 +43,25 @@ preprocessed_followers:
 fashion_entities:
   type: pandas.CSVDataset
   filepath: data/01_raw/fashion_entities.csv
+
+# BigQuery sample data loaded into DuckDB
+accuweather_data:
+  type: ibis.TableDataset
+  table_name: accuweather_data
+  connection: ${_connection}
+  save_args:
+    materialized: table
+
+google_trends_rising_data:
+  type: ibis.TableDataset
+  table_name: google_trends_rising_data
+  connection: ${_connection}
+  save_args:
+    materialized: table
+
+google_trends_top_data:
+  type: ibis.TableDataset
+  table_name: google_trends_top_data
+  connection: ${_connection}
+  save_args:
+    materialized: table
