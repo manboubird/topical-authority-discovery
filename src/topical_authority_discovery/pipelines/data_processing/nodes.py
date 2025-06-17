@@ -82,9 +82,23 @@ def load_bigquery_to_duckdb(
                 elapsed_time = time.time() - start_time
                 logging.info(f"BigQuery query executed and data loaded in {elapsed_time:.2f} seconds")
                 
-                # Create table in DuckDB using a sanitized table name
-                duckdb_table_name = f"{dataset_id}_{table_name}".replace('-', '_')
-                con.execute(f"CREATE TABLE IF NOT EXISTS {duckdb_table_name} AS SELECT * FROM pa_table")
+                # Create a more intuitive table name based on the data source
+                if "accuweather" in project_id:
+                    duckdb_table_name = "accuweather_weather"
+                elif "google_trends" in dataset_id:
+                    if "rising" in table_name:
+                        duckdb_table_name = "google_trends_rising_terms"
+                    else:
+                        duckdb_table_name = "google_trends_top_terms"
+                else:
+                    # Fallback to a sanitized version of the original name
+                    duckdb_table_name = f"{dataset_id}_{table_name}".replace('-', '_')
+                
+                # Drop the table if it exists to ensure clean state
+                con.execute(f"DROP TABLE IF EXISTS {duckdb_table_name}")
+                
+                # Create table in DuckDB
+                con.execute(f"CREATE TABLE {duckdb_table_name} AS SELECT * FROM pa_table")
                 logging.info(f"Data successfully loaded into DuckDB table: {duckdb_table_name}")
                 
                 # Return Ibis table object

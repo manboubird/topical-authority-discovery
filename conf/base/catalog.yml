@@ -47,21 +47,21 @@ fashion_entities:
 # BigQuery sample data loaded into DuckDB
 accuweather_data:
   type: ibis.TableDataset
-  table_name: accuweather_data
+  table_name: accuweather_weather
   connection: ${_connection}
   save_args:
     materialized: table
 
 google_trends_rising_data:
   type: ibis.TableDataset
-  table_name: google_trends_rising_data
+  table_name: google_trends_rising_terms
   connection: ${_connection}
   save_args:
     materialized: table
 
 google_trends_top_data:
   type: ibis.TableDataset
-  table_name: google_trends_top_data
+  table_name: google_trends_top_terms
   connection: ${_connection}
   save_args:
     materialized: table
