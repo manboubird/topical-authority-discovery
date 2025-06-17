@@ -147,19 +147,45 @@ The algorithm computes authority scores for users in a social network based on t
 ```
 topical-authority-discovery/
 ├── data/
-│   ├── 01_raw/           # Raw input data
+│   ├── 01_raw/           # Raw input data including sample.ddb (DuckDB database)
 │   ├── 02_intermediate/  # Processed data
 │   └── 03_primary/       # Final output data
 ├── src/
 │   └── topical_authority_discovery/
-│       └── pipelines/
-│           └── data_processing/
-│               ├── nodes.py      # Algorithm implementation
-│               └── pipeline.py   # Kedro pipeline definition
-└── conf/
-    └── base/
-        └── catalog.yml   # Data catalog configuration
+│       ├── pipelines/
+│       │   └── data_processing/
+│       │       ├── nodes.py      # Data processing nodes including BigQuery loading
+│       │       └── pipeline.py   # Kedro pipeline definition
+│       └── tests/
+│           └── pipelines/
+│               └── data_processing/
+│                   └── test_nodes.py  # Unit tests for data processing nodes
+├── conf/
+│   ├── base/
+│   │   ├── catalog.yml   # Data catalog configuration
+│   │   └── parameters.yml # Pipeline parameters including BigQuery table IDs
+│   └── local/
+│       └── credentials.yml # Local credentials (git-ignored)
+├── notebooks/            # Jupyter notebooks for analysis
+├── .gitignore           # Git ignore rules
+├── pyproject.toml       # Project metadata and dependencies
+├── README.md           # Project documentation
+└── requirements.txt    # Python package dependencies
 ```
+
+Key files and their purposes:
+- `data/01_raw/sample.ddb`: DuckDB database containing BigQuery data
+- [`src/topical_authority_discovery/pipelines/data_processing/nodes.py`](src/topical_authority_discovery/pipelines/data_processing/nodes.py): Implementation of data loading and processing nodes
+- [`src/topical_authority_discovery/pipelines/data_processing/pipeline.py`](src/topical_authority_discovery/pipelines/data_processing/pipeline.py): Kedro pipeline definition
+- [`src/topical_authority_discovery/tests/pipelines/data_processing/test_nodes.py`](src/topical_authority_discovery/tests/pipelines/data_processing/test_nodes.py): Unit tests for data processing nodes
+- [`conf/base/catalog.yml`](conf/base/catalog.yml): Data catalog configuration for DuckDB tables
+- [`conf/base/parameters.yml`](conf/base/parameters.yml): Configuration for BigQuery table IDs and row limits
+- `conf/local/credentials.yml`: GCP credentials for BigQuery access (not tracked in git)
+- [`notebooks/`](notebooks/): Directory containing Jupyter notebooks for analysis
+- [`.gitignore`](.gitignore): Git ignore rules
+- [`pyproject.toml`](pyproject.toml): Project metadata and dependencies
+- [`README.md`](README.md): Project documentation
+- [`requirements.txt`](requirements.txt): Python package dependencies
 
 ## Usage
 
@@ -216,21 +242,56 @@ This will open a web-based GUI showing the pipeline structure. The pipeline can 
 
 ```mermaid
 graph TD
-    A[followers] --> B[preprocess_followers_node]
-    B --> C[preprocessed_followers]
+    %% Data Loading Nodes
+    A1[params:accuweather_table_id] --> B1[load_accuweather_data_node]
+    A2[params:accuweather_limit] --> B1
+    B1 --> C1[accuweather_data]
     
-    D[fashion_entities] --> E[construct_fashion_knowledge_base_node]
-    F[params:fashion_knowledge_base_path] --> E
+    D1[params:google_trends_rising_table_id] --> E1[load_google_trends_rising_node]
+    D2[params:google_trends_rising_limit] --> E1
+    E1 --> F1[google_trends_rising_data]
     
-    G[users] --> H[extract_keyword_from_bio_node]
-    D --> H
-    F --> H
-    H --> I[users_with_keywords]
+    G1[params:google_trends_top_table_id] --> H1[load_google_trends_top_node]
+    G2[params:google_trends_top_limit] --> H1
+    H1 --> I1[google_trends_top_data]
     
-    C --> J[compute_authority_score_node]
-    I --> J
-    J --> K[authority_scores]
+    %% Preprocessing Nodes
+    J[followers] --> K[preprocess_followers_node]
+    K --> L[preprocessed_followers]
+    
+    M[fashion_entities] --> N[construct_fashion_knowledge_base_node]
+    O[params:fashion_knowledge_base_path] --> N
+    
+    P[users] --> Q[extract_keyword_from_bio_node]
+    M --> Q
+    O --> Q
+    Q --> R[users_with_keywords]
+    
+    L --> S[compute_authority_score_node]
+    R --> S
+    S --> T[authority_scores]
 ```
+
+The pipeline consists of two main parts:
+1. **Data Loading Pipeline**
+   - Loads data from BigQuery into DuckDB
+   - Creates three separate tables for different data sources
+   - Uses parameters for table IDs and row limits
+
+2. **Preprocessing Pipeline**
+   - Processes follower relationships into a directed graph
+   - Constructs a fashion knowledge base
+   - Extracts keywords from user biographies
+   - Computes authority scores
+
+Each node is tagged for easy filtering and execution:
+- `data_loading`: BigQuery data loading nodes
+- `bigquery`: Nodes that interact with BigQuery
+- `preprocessing`: Data preprocessing nodes
+- `graph_construction`: Nodes that build the follower graph
+- `knowledge_base`: Nodes that handle the fashion knowledge base
+- `keyword_extraction`: Nodes that extract keywords from text
+- `authority_discovery`: Nodes that compute authority scores
 
 ## Testing the Pipeline
 
@@ -275,3 +336,90 @@ Each test provides detailed output about:
 - Confidence scores
 - Verification steps
 - Success/failure indicators
+
+## Loading BigQuery Data into DuckDB
+
+The project includes functionality to load data from BigQuery public datasets into a local DuckDB database. This is useful for working with large datasets without needing to download them entirely.
+
+### Available Datasets
+
+1. **AccuWeather Data**
+   - Table: `accuweather-com.sample.sample`
+   - DuckDB table: `accuweather_weather`
+
+2. **Google Trends Rising Terms**
+   - Table: `bigquery-public-data.google_trends.international_top_rising_terms`
+   - DuckDB table: `google_trends_rising_terms`
+
+3. **Google Trends Top Terms**
+   - Table: `bigquery-public-data.google_trends.international_top_terms`
+   - DuckDB table: `google_trends_top_terms`
+
+### Loading Data
+
+To load these datasets into DuckDB, run:
+
+```bash
+kedro run --pipeline=data_processing --nodes=load_accuweather_data_node,load_google_trends_rising_node,load_google_trends_top_node
+```
+
+This will:
+1. Connect to BigQuery using your GCP credentials
+2. Query each dataset with a limit of 100 rows (configurable in `parameters.yml`)
+3. Load the data into DuckDB tables in `data/01_raw/sample.ddb`
+
+### Viewing Data with DuckDB Web UI
+
+DuckDB provides a web-based UI for exploring and querying your data. To use it:
+
+1. **Install DuckDB** (if not already installed):
+   ```bash
+   # For macOS
+   brew install duckdb
+   
+   # For Linux
+   curl -L https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-amd64.zip -o duckdb.zip
+   unzip duckdb.zip
+   ```
+
+2. **Start the Web UI**:
+   ```bash
+   # Navigate to your project directory
+   cd /path/to/topical-authority-discovery
+   
+   # Start DuckDB Web UI with your database file
+   duckdb -ui data/01_raw/sample.ddb
+   ```
+
+3. **Explore the data**:
+   - The Web UI will open in your default browser
+   - In the left sidebar, you'll see your tables:
+     - `accuweather_weather`
+     - `google_trends_rising_terms`
+     - `google_trends_top_terms`
+   - Click on any table to view its contents
+   - Use the SQL editor to run custom queries
+
+4. **Example queries**:
+   ```sql
+   -- View all tables
+   SHOW TABLES;
+
+   -- View AccuWeather data
+   SELECT * FROM accuweather_weather LIMIT 10;
+
+   -- View Google Trends rising terms
+   SELECT * FROM google_trends_rising_terms LIMIT 10;
+
+   -- View Google Trends top terms
+   SELECT * FROM google_trends_top_terms LIMIT 10;
+   ```
+
+The DuckDB Web UI provides features like:
+- Table browsing and filtering
+- SQL query execution
+- Data visualization
+- Export capabilities
+- Schema exploration
+
+For more information about DuckDB Web UI, visit [DuckDB Web UI Documentation](https://duckdb.org/2025/03/12/duckdb-ui.html).
