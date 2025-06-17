@@ -52,7 +52,7 @@ def load_bigquery_to_duckdb(
             billing_project_id = context.params["bigquery"]["project_id"]
             duckdb_path = context.params["duckdb_path"]
             credentials = context.config_loader.get("credentials")
-            service_account_path = credentials["bigquery"]["service_account_path"]
+            service_account_path = credentials["gcp"]["service_account_path"]
             
             # Parse table_id into components
             project_id, dataset_id, table_name = table_id.split('.')
