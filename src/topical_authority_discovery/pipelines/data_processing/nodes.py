@@ -23,6 +23,7 @@ from google.oauth2 import service_account
 from kedro.framework.session import KedroSession
 from kedro.framework.startup import bootstrap_project
 from topical_authority_discovery.utils import get_bigquery_client, verify_bigquery_permissions, create_bigquery_query_job
+from typing import Tuple, Dict, List
 
 def load_bigquery_to_duckdb(
     table_id: str,
@@ -446,3 +447,366 @@ def compute_authority_score(
     )
     
     return authority_scores
+
+def create_graph_and_initial_sc(
+    raw_follower_data: pd.DataFrame,
+    raw_user_interests: pd.DataFrame
+) -> Tuple[nx.DiGraph, np.ndarray, Dict[str, int], Dict[str, int]]:
+    """
+    Create NetworkX graph and initial topic interest matrix from raw data.
+    
+    Args:
+        raw_follower_data: DataFrame with columns (follower_id, followed_id)
+        raw_user_interests: DataFrame with columns (user_id, topic, score)
+    
+    Returns:
+        Tuple containing:
+        - nx.DiGraph: Directed graph representing follower relationships
+        - np.ndarray: Initial topic interest matrix Sc of shape (|T| x |V|)
+        - Dict[str, int]: Topic to index mapping
+        - Dict[str, int]: User to index mapping
+    """
+    # Create directed graph from follower data
+    graph = nx.DiGraph()
+    
+    # Add edges from follower data
+    for _, row in raw_follower_data.iterrows():
+        follower_id = str(row['follower_id'])
+        followed_id = str(row['followed_id'])
+        graph.add_edge(follower_id, followed_id)
+    
+    # Get unique topics and users
+    topics = sorted(raw_user_interests['topic'].unique())
+    users = sorted(graph.nodes())
+    
+    # Create mappings
+    topic_to_idx = {topic: idx for idx, topic in enumerate(topics)}
+    user_to_idx = {user: idx for idx, user in enumerate(users)}
+    
+    # Initialize Sc matrix: |T| x |V| (topics x users)
+    n_topics = len(topics)
+    n_users = len(users)
+    Sc = np.zeros((n_topics, n_users))
+    
+    # Fill Sc matrix based on user interests
+    for _, row in raw_user_interests.iterrows():
+        user_id = str(row['user_id'])
+        topic = row['topic']
+        score = row['score']
+        
+        # Only include users that are in the graph
+        if user_id in user_to_idx and topic in topic_to_idx:
+            user_idx = user_to_idx[user_id]
+            topic_idx = topic_to_idx[topic]
+            
+            # Set to 1 if user has interest in this topic (score > 0)
+            if score > 0:
+                Sc[topic_idx, user_idx] = 1
+    
+    logging.info(f"Created graph with {len(graph.nodes())} users and {len(graph.edges())} edges")
+    logging.info(f"Created Sc matrix with shape {Sc.shape} ({n_topics} topics x {n_users} users)")
+    logging.info(f"Number of non-zero entries in Sc: {np.count_nonzero(Sc)}")
+    
+    return graph, Sc, topic_to_idx, user_to_idx
+
+def propagate_interests(
+    graph: nx.DiGraph,
+    Sc: np.ndarray,
+    topic_to_idx: Dict[str, int],
+    user_to_idx: Dict[str, int],
+    alg_params: Dict[str, float]
+) -> np.ndarray:
+    """
+    Implement Algorithm 1: Fast Algorithm for Interest Propagation.
+    
+    This function implements the three-pass algorithm described in the ALF paper:
+    - PASS 1: Compute explainable authority scores (Fe)
+    - PASS 2: Re-estimate interests (Si) for all users
+    - PASS 3: Compute inferred authority scores (Fi)
+    - Final: Combine scores as F = alpha * Fe + beta * Fi
+    
+    Args:
+        graph: NetworkX directed graph representing follower relationships
+        Sc: Initial topic interest matrix of shape (|T| x |V|)
+        topic_to_idx: Mapping from topic names to matrix row indices
+        user_to_idx: Mapping from user IDs to matrix column indices
+        alg_params: Dictionary containing algorithm parameters:
+            - alpha: Weight parameter for explainable authority (default: 0.1)
+            - beta: Weight parameter for inferred authority (default: 0.01)
+            - gamma: Weight parameter for combining scores (default: 1.0)
+    
+    Returns:
+        np.ndarray: Final authority matrix F of shape (|T| x |V|)
+    """
+    # Extract parameters with defaults
+    alpha = alg_params.get('alpha', 0.1)
+    beta = alg_params.get('beta', 0.01)
+    gamma = alg_params.get('gamma', 1.0)
+    
+    n_topics, n_users = Sc.shape
+    
+    # Early return for empty matrices
+    if n_topics == 0 or n_users == 0:
+        logging.info("Empty input matrices, returning zero matrix")
+        return np.zeros((n_topics, n_users))
+    
+    # Initialize matrices
+    Fe = np.zeros((n_topics, n_users))  # Explainable authority scores
+    Si = np.zeros((n_topics, n_users))  # Re-estimated interests
+    Fi = np.zeros((n_topics, n_users))  # Inferred authority scores
+    
+    # Precompute user indices for efficiency
+    user_indices = {user: idx for user, idx in user_to_idx.items()}
+    
+    # PASS 1: Compute explainable authority scores (Fe)
+    # Fe_v = (1 / min_v) * sum(Sc_u for u -> v where I(u) is not empty)
+    for v in graph.nodes():
+        v_idx = user_indices[v]
+        followers = list(graph.predecessors(v))
+        
+        if not followers:
+            continue
+            
+        # Find followers with non-empty interests efficiently
+        followers_with_interests = []
+        for u in followers:
+            u_idx = user_indices[u]
+            if np.any(Sc[:, u_idx] > 0):
+                followers_with_interests.append(u_idx)
+        
+        if followers_with_interests:
+            min_v = len(followers_with_interests)
+            # Vectorized sum of Sc matrices for followers with interests
+            Fe[:, v_idx] = np.sum(Sc[:, followers_with_interests], axis=1) / min_v
+    
+    # PASS 2: Re-estimate interests (Si)
+    # Si_u = (1 / nout_u) * sum(Fe_v for u -> v)
+    for u in graph.nodes():
+        u_idx = user_indices[u]
+        following = list(graph.successors(u))
+        
+        if following:
+            nout_u = len(following)
+            following_indices = [user_indices[v] for v in following]
+            # Vectorized sum of Fe matrices for users that u follows
+            Si[:, u_idx] = np.sum(Fe[:, following_indices], axis=1) / nout_u
+    
+    # PASS 3: Compute inferred authority scores (Fi)
+    # Fi_v = (1 / nin_v) * sum(Si_u for u -> v)
+    for v in graph.nodes():
+        v_idx = user_indices[v]
+        followers = list(graph.predecessors(v))
+        
+        if followers:
+            nin_v = len(followers)
+            follower_indices = [user_indices[u] for u in followers]
+            # Vectorized sum of Si matrices for followers of v
+            Fi[:, v_idx] = np.sum(Si[:, follower_indices], axis=1) / nin_v
+    
+    # Final authority scores: F = alpha * Fe + beta * Fi
+    F = alpha * Fe + beta * Fi
+    
+    # Log only essential information
+    non_zero_fe = np.count_nonzero(Fe)
+    non_zero_fi = np.count_nonzero(Fi)
+    non_zero_f = np.count_nonzero(F)
+    
+    logging.info(f"ALF Algorithm 1 completed: {non_zero_fe} Fe, {non_zero_fi} Fi, {non_zero_f} F non-zero elements")
+    
+    return F
+
+def compute_authority_scores(
+    F: np.ndarray,
+    graph: nx.DiGraph,
+    topic_to_idx: Dict[str, int],
+    user_to_idx: Dict[str, int]
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Compute normalized Z-scores and weighted Z-scores for authority scores.
+    
+    This function implements sections 4.3.1 and 4.3.2 of the ALF paper:
+    - Section 4.3.1: Normalize authority scores using Z-scores
+    - Section 4.3.2: Compute weighted Z-scores using follower counts
+    
+    Args:
+        F: Propagated authority matrix of shape (|T| x |V|)
+        graph: NetworkX directed graph representing follower relationships
+        topic_to_idx: Mapping from topic names to matrix row indices
+        user_to_idx: Mapping from user IDs to matrix column indices
+    
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: (wZF, ZF) where:
+            - wZF: Weighted Z-score matrix of shape (|T| x |V|)
+            - ZF: Z-score matrix of shape (|T| x |V|)
+    """
+    n_topics, n_users = F.shape
+    
+    # Early return for empty matrices
+    if n_topics == 0 or n_users == 0:
+        logging.info("Empty input matrix, returning zero matrices")
+        return np.zeros((n_topics, n_users)), np.zeros((n_topics, n_users))
+    
+    # Initialize ZF and wZF matrices
+    ZF = np.zeros((n_topics, n_users))
+    wZF = np.zeros((n_topics, n_users))
+    
+    # Precompute follower counts for all users
+    follower_counts = {user_id: graph.in_degree(user_id) for user_id in user_to_idx.keys()}
+    
+    # Section 4.3.1: Compute Z-scores for each topic (row)
+    for topic_idx in range(n_topics):
+        topic_scores = F[topic_idx, :]
+        non_zero_mask = topic_scores > 0
+        non_zero_scores = topic_scores[non_zero_mask]
+        
+        if len(non_zero_scores) > 0:
+            log_scores = np.log(non_zero_scores)
+            mu = np.mean(log_scores)
+            sigma = np.std(log_scores)
+            
+            if sigma > 0:
+                # Vectorized Z-score computation
+                ZF[topic_idx, non_zero_mask] = (log_scores - mu) / sigma
+                ZF[topic_idx, ~non_zero_mask] = -3.0  # 3 standard deviations below mean
+    
+    # Section 4.3.2: Compute weighted Z-scores efficiently
+    # Vectorized computation of weight factors
+    for user_id, user_idx in user_to_idx.items():
+        nin_u = follower_counts[user_id]
+        if nin_u > 0:
+            # Get all topics for this user
+            user_f_scores = F[:, user_idx]
+            user_zf_scores = ZF[:, user_idx]
+            
+            # Vectorized weight factor computation
+            valid_scores = user_f_scores > 0
+            if np.any(valid_scores):
+                weight_factors = np.log(nin_u * user_f_scores[valid_scores])
+                wZF[valid_scores, user_idx] = user_zf_scores[valid_scores] * weight_factors
+    
+    # Log only essential summary information
+    non_zero_zf = np.count_nonzero(ZF)
+    non_zero_wzf = np.count_nonzero(wZF)
+    logging.info(f"Authority scores computed: {non_zero_zf} ZF, {non_zero_wzf} wZF non-zero elements")
+    
+    return wZF, ZF
+
+def assign_topical_authorities(
+    wzf: np.ndarray,
+    F: np.ndarray,
+    ZF: np.ndarray,
+    topic_to_idx: Dict[str, int],
+    user_to_idx: Dict[str, int],
+    alg_params: Dict[str, float]
+) -> pd.DataFrame:
+    """
+    Assign final topical authorities and remove false positives.
+    
+    This function implements section 4.3.3 of the ALF paper:
+    - Assign highest scoring topic to each user
+    - FP1 removal: Filter low-scoring users using popularity-based thresholds
+    - FP2 removal: Filter using voting mechanism with top-k scores
+    
+    Args:
+        wzf: Weighted Z-score matrix of shape (|T| x |V|)
+        F: Original authority matrix of shape (|T| x |V|)
+        ZF: Z-score matrix of shape (|T| x |V|)
+        topic_to_idx: Mapping from topic names to matrix row indices
+        user_to_idx: Mapping from user IDs to matrix column indices
+        alg_params: Dictionary containing algorithm parameters:
+            - rho_mid: Mid-point parameter for popularity threshold (default: 0.5)
+            - tau: Threshold parameter for filtering (default: 0.1)
+            - k_top: Number of top scores for voting mechanism (default: 10)
+    
+    Returns:
+        pd.DataFrame: Final authority list with columns (user_id, assigned_topic, authority_score)
+    """
+    # Extract parameters with defaults
+    rho_mid = alg_params.get('rho_mid', 0.5)
+    tau = alg_params.get('tau', 0.1)
+    k_top = int(alg_params.get('k_top', 10))
+    
+    n_topics, n_users = wzf.shape
+    
+    # Early return for empty matrices
+    if n_topics == 0 or n_users == 0:
+        logging.info("Empty input matrices, returning empty DataFrame")
+        return pd.DataFrame(columns=['user_id', 'assigned_topic', 'authority_score'])
+    
+    # Create reverse mappings
+    idx_to_topic = {idx: topic for topic, idx in topic_to_idx.items()}
+    idx_to_user = {idx: user for user, idx in user_to_idx.items()}
+    
+    # Step 1: Assign highest scoring topic to each user (vectorized)
+    best_topic_indices = np.argmax(wzf, axis=0)
+    best_scores = np.max(wzf, axis=0)
+    
+    # Create initial assignments for users with positive scores
+    assigned_topics = []
+    for user_idx in range(n_users):
+        if best_scores[user_idx] > 0:
+            assigned_topics.append({
+                'user_idx': user_idx,
+                'topic_idx': best_topic_indices[user_idx],
+                'wzf_score': best_scores[user_idx],
+                'user_id': idx_to_user[user_idx],
+                'topic_name': idx_to_topic[best_topic_indices[user_idx]]
+            })
+    
+    # Step 2: FP1 removal - Filter low-scoring users using popularity-based thresholds
+    filtered_assignments = []
+    
+    for assignment in assigned_topics:
+        topic_idx = assignment['topic_idx']
+        wzf_score = assignment['wzf_score']
+        
+        # Calculate popularity-based threshold θt
+        topic_scores = wzf[topic_idx, :]
+        non_zero_scores = topic_scores[topic_scores > 0]
+        
+        if len(non_zero_scores) > 0:
+            sorted_scores = np.sort(non_zero_scores)
+            mid_idx = int(len(sorted_scores) * rho_mid)
+            theta_t = sorted_scores[mid_idx] + tau if mid_idx < len(sorted_scores) else sorted_scores[-1] + tau
+            
+            if wzf_score >= theta_t:
+                filtered_assignments.append(assignment)
+    
+    # Step 3: FP2 removal - Voting mechanism with top-k scores (vectorized)
+    final_assignments = []
+    
+    for assignment in filtered_assignments:
+        topic_idx = assignment['topic_idx']
+        user_idx = assignment['user_idx']
+        
+        # Get top-k users for this topic based on F and ZF scores
+        topic_f_scores = F[topic_idx, :]
+        topic_zf_scores = ZF[topic_idx, :]
+        
+        top_k_f_indices = np.argsort(topic_f_scores)[-k_top:]
+        top_k_zf_indices = np.argsort(topic_zf_scores)[-k_top:]
+        
+        # Check if user is in top-k for at least one metric
+        if user_idx in top_k_f_indices or user_idx in top_k_zf_indices:
+            final_assignments.append(assignment)
+    
+    # Step 4: Create final DataFrame
+    if final_assignments:
+        final_df = pd.DataFrame([
+            {
+                'user_id': assignment['user_id'],
+                'assigned_topic': assignment['topic_name'],
+                'authority_score': assignment['wzf_score']
+            }
+            for assignment in final_assignments
+        ])
+        
+        # Sort by authority score in descending order
+        final_df = final_df.sort_values('authority_score', ascending=False).reset_index(drop=True)
+    else:
+        final_df = pd.DataFrame(columns=['user_id', 'assigned_topic', 'authority_score'])
+    
+    # Log only essential summary information
+    logging.info(f"Authority assignment: {len(assigned_topics)} → {len(filtered_assignments)} → {len(final_assignments)} final")
+    
+    return final_df

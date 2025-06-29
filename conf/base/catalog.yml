@@ -44,6 +44,30 @@ fashion_entities:
   type: pandas.CSVDataset
   filepath: data/01_raw/fashion_entities.csv
 
+# Algorithm 1 datasets for precise implementation
+raw_follower_data:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/raw_follower_data.csv
+
+raw_user_interests:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/raw_user_interests.csv
+
+params:alg_params:
+  type: MemoryDataset
+
+f_matrix:
+  type: MemoryDataset
+
+wzf_matrix:
+  type: MemoryDataset
+
+zf_matrix:
+  type: MemoryDataset
+
+final_authorities:
+  type: MemoryDataset
+
 # BigQuery sample data loaded into DuckDB
 accuweather_data:
   type: ibis.TableDataset

@@ -1,0 +1,19 @@
+# ALF Algorithm Parameters
+# Based on the ALF paper recommendations for practical implementation
+
+alg_params:
+  # Interest Propagation Parameters (Algorithm 1)
+  alpha: 0.1      # Weight parameter for explainable authority (Fe)
+  beta: 0.01      # Weight parameter for inferred authority (Fi) 
+  gamma: 1.0      # Weight parameter for combining scores (F = Fe + Fi)
+  
+  # Authority Assignment Parameters (Section 4.3.3)
+  rho_mid: 0.5    # Mid-point parameter for popularity threshold (50th percentile)
+  tau: 0.1        # Threshold parameter for filtering false positives
+  k_top: 10       # Number of top scores for voting mechanism
+
+# Parameter explanations:
+# - alpha, beta, gamma: Following Corollary 2 from ALF paper where beta << alpha << 1 and gamma = 1
+# - rho_mid: Controls the percentile for popularity-based threshold calculation
+# - tau: Additional threshold buffer for filtering low-scoring users
+# - k_top: Number of top users considered in the voting mechanism for FP2 removal

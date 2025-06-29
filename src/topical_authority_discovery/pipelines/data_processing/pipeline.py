@@ -7,12 +7,46 @@ from .nodes import (
     construct_fashion_knowledge_base,
     combine_user_datasets,
     load_bigquery_to_duckdb,
+    create_graph_and_initial_sc,
+    propagate_interests,
+    compute_authority_scores,
+    assign_topical_authorities,
 )
 
 
 def create_pipeline(**kwargs) -> Pipeline:
     return pipeline(
         [
+            # ALF Algorithm 1 Workflow Nodes
+            node(
+                func=create_graph_and_initial_sc,
+                inputs=["raw_follower_data", "raw_user_interests"],
+                outputs=["graph", "sc_matrix", "topic_to_idx", "user_to_idx"],
+                name="create_graph_and_initial_sc_node",
+                tags=["alf_workflow", "graph_construction"],
+            ),
+            node(
+                func=propagate_interests,
+                inputs=["graph", "sc_matrix", "topic_to_idx", "user_to_idx", "params:alg_params"],
+                outputs="f_matrix",
+                name="propagate_interests_node",
+                tags=["alf_workflow", "interest_propagation"],
+            ),
+            node(
+                func=compute_authority_scores,
+                inputs=["f_matrix", "graph", "topic_to_idx", "user_to_idx"],
+                outputs=["wzf_matrix", "zf_matrix"],
+                name="compute_authority_scores_node",
+                tags=["alf_workflow", "authority_scoring"],
+            ),
+            node(
+                func=assign_topical_authorities,
+                inputs=["wzf_matrix", "f_matrix", "zf_matrix", "topic_to_idx", "user_to_idx", "params:alg_params"],
+                outputs="final_authorities",
+                name="assign_topical_authorities_node",
+                tags=["alf_workflow", "authority_assignment"],
+            ),
+            # Legacy nodes (keeping for backward compatibility)
             node(
                 func=preprocess_followers,
                 inputs="followers",
