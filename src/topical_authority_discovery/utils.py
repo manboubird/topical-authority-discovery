@@ -18,20 +18,26 @@ def get_bigquery_client(billing_project_id: str, service_account_path: str) -> b
     Returns:
         bigquery.Client: Authenticated BigQuery client
     """
-    if not Path(service_account_path).exists():
-        raise FileNotFoundError(f"Service account credentials file not found at: {service_account_path}")
-    
-    credentials = service_account.Credentials.from_service_account_file(
-        service_account_path,
-        scopes=["https://www.googleapis.com/auth/cloud-platform"]
-    )
-    
-    logging.info(f"Authenticated as: {credentials.service_account_email}")
-    
-    return bigquery.Client(
-        project=billing_project_id,
-        credentials=credentials
-    )
+    try:
+        # Try to use service account credentials if provided
+        if Path(service_account_path).exists():
+            credentials = service_account.Credentials.from_service_account_file(
+                service_account_path,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+            logging.info(f"Authenticated as: {credentials.service_account_email}")
+            return bigquery.Client(
+                project=billing_project_id,
+                credentials=credentials
+            )
+        else:
+            # Fall back to default authentication (Application Default Credentials)
+            logging.info("Service account file not found, using Application Default Credentials")
+            return bigquery.Client(project=billing_project_id)
+    except Exception as e:
+        # Fall back to default authentication if service account fails
+        logging.warning(f"Failed to use service account: {e}. Using Application Default Credentials")
+        return bigquery.Client(project=billing_project_id)
 
 def verify_bigquery_permissions(client: bigquery.Client, host_project_id: str, dataset_id: str, table_id: str) -> None:
     """

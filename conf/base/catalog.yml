@@ -75,6 +75,7 @@ accuweather_data:
   connection: ${_connection}
   save_args:
     materialized: table
+    overwrite: true
 
 google_trends_rising_data:
   type: ibis.TableDataset
@@ -82,6 +83,7 @@ google_trends_rising_data:
   connection: ${_connection}
   save_args:
     materialized: table
+    overwrite: true
 
 google_trends_top_data:
   type: ibis.TableDataset
@@ -89,3 +91,4 @@ google_trends_top_data:
   connection: ${_connection}
   save_args:
     materialized: table
+    overwrite: true

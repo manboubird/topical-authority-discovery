@@ -98,8 +98,34 @@ def load_bigquery_to_duckdb(
                 # Drop the table if it exists to ensure clean state
                 con.execute(f"DROP TABLE IF EXISTS {duckdb_table_name}")
                 
-                # Create table in DuckDB
-                con.execute(f"CREATE TABLE {duckdb_table_name} AS SELECT * FROM pa_table")
+                # Handle DATE columns by converting them to strings to avoid type conversion issues
+                schema = pa_table.schema
+                converted_columns = []
+                
+                for i, field in enumerate(schema):
+                    column_name = field.name
+                    column_data = pa_table.column(i)
+                    
+                    # Convert DATE columns to strings to avoid DuckDB conversion issues
+                    if str(field.type) == 'date32[day]' or str(field.type) == 'date64[ms]':
+                        logging.info(f"Converting DATE column '{column_name}' to string to avoid DuckDB conversion issues")
+                        # Convert date to string format
+                        converted_column = column_data.cast(pa.string())
+                        converted_columns.append(converted_column)
+                    else:
+                        converted_columns.append(column_data)
+                
+                # Create new PyArrow table with converted columns
+                converted_schema = pa.schema([
+                    pa.field(field.name, converted_columns[i].type) 
+                    for i, field in enumerate(schema)
+                ])
+                converted_pa_table = pa.table(converted_columns, schema=converted_schema)
+                
+                # Register the converted PyArrow table with DuckDB and create the table
+                con.register(f"temp_{duckdb_table_name}", converted_pa_table)
+                con.execute(f"CREATE TABLE {duckdb_table_name} AS SELECT * FROM temp_{duckdb_table_name}")
+                con.unregister(f"temp_{duckdb_table_name}")
                 logging.info(f"Data successfully loaded into DuckDB table: {duckdb_table_name}")
                 
                 # Return Ibis table object
